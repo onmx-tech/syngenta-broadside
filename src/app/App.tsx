@@ -10,13 +10,19 @@ const CompanyIndex = lazy(() =>
 const PasswordGate = lazy(() =>
   import("./components/PasswordGate").then((m) => ({ default: m.PasswordGate }))
 );
+const AdminShell = lazy(() =>
+  import("./admin/AdminShell").then((m) => ({ default: m.AdminShell }))
+);
 
 function readQueryParams() {
-  if (typeof window === "undefined") return { broadside: null, variant: null };
+  if (typeof window === "undefined")
+    return { broadside: null, variant: null, admin: false };
   const params = new URLSearchParams(window.location.search);
+  const pathname = window.location.pathname.replace(/\/+$/, "");
   return {
     broadside: params.get("broadside") ?? params.get("empresa"),
     variant: params.get("variant") as Variant | null,
+    admin: params.has("admin") || pathname === "/admin",
   };
 }
 
@@ -50,13 +56,21 @@ function Fallback() {
 }
 
 export default function App() {
-  const [{ broadside, variant }, setParams] = useState(readQueryParams);
+  const [{ broadside, variant, admin }, setParams] = useState(readQueryParams);
 
   useEffect(() => {
     const onChange = () => setParams(readQueryParams());
     window.addEventListener("popstate", onChange);
     return () => window.removeEventListener("popstate", onChange);
   }, []);
+
+  if (admin) {
+    return (
+      <Suspense fallback={<Fallback />}>
+        <AdminShell />
+      </Suspense>
+    );
+  }
 
   const company = broadside ? getCompanyBySlug(broadside) : null;
   const activeVariant: Variant = company
