@@ -26,6 +26,10 @@ export function SeedcarePage({ company, variant }: Props) {
           <img
             src={imgHeader}
             alt="Seedcare Syngenta"
+            width={900}
+            height={88}
+            decoding="async"
+            fetchPriority="high"
             className="w-full h-auto block"
           />
         </header>
@@ -35,6 +39,10 @@ export function SeedcarePage({ company, variant }: Props) {
             <img
               src={imgHero}
               alt=""
+              width={900}
+              height={280}
+              decoding="async"
+              fetchPriority="high"
               className="absolute inset-0 w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent" />
@@ -118,6 +126,8 @@ export function SeedcarePage({ company, variant }: Props) {
               <img
                 src={company.logoUrl}
                 alt={company.name}
+                decoding="async"
+                fetchPriority="high"
                 className="max-w-full max-h-full object-contain"
               />
             </div>
@@ -148,6 +158,8 @@ export function SeedcarePage({ company, variant }: Props) {
                 <img
                   src={seloByVariant[variant]}
                   alt="Selo de Excelência Seedcare"
+                  loading="lazy"
+                  decoding="async"
                   className="h-[180px] sm:h-[220px] md:h-[240px] w-auto object-contain"
                 />
               </div>
@@ -216,6 +228,8 @@ export function SeedcarePage({ company, variant }: Props) {
                         <img
                           src={block.images[variant]}
                           alt={block.label}
+                          loading="lazy"
+                          decoding="async"
                           className={`block object-contain ${
                             block.imageAnchor === "bottom"
                               ? "w-full max-h-full"

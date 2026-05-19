@@ -1,29 +1,52 @@
-import { useEffect, useState } from "react";
-import { SeedcarePage } from "./components/SeedcarePage";
-import { CompanyIndex } from "./components/CompanyIndex";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { getCompanyBySlug, type Variant } from "../data/companies";
+
+const SeedcarePage = lazy(() =>
+  import("./components/SeedcarePage").then((m) => ({ default: m.SeedcarePage }))
+);
+const CompanyIndex = lazy(() =>
+  import("./components/CompanyIndex").then((m) => ({ default: m.CompanyIndex }))
+);
+const PasswordGate = lazy(() =>
+  import("./components/PasswordGate").then((m) => ({ default: m.PasswordGate }))
+);
 
 function readQueryParams() {
   if (typeof window === "undefined") return { broadside: null, variant: null };
   const params = new URLSearchParams(window.location.search);
   return {
-    broadside:
-      params.get("broadside") ??
-      params.get("empresa"),
+    broadside: params.get("broadside") ?? params.get("empresa"),
     variant: params.get("variant") as Variant | null,
   };
 }
 
 const BASE_TITLE = "Broadside Seedcare | Syngenta";
 
-function setMeta(name: string, content: string, attr: "name" | "property" = "name") {
-  let el = document.querySelector(`meta[${attr}="${name}"]`) as HTMLMetaElement | null;
+function setMeta(
+  name: string,
+  content: string,
+  attr: "name" | "property" = "name"
+) {
+  let el = document.querySelector(
+    `meta[${attr}="${name}"]`
+  ) as HTMLMetaElement | null;
   if (!el) {
     el = document.createElement("meta");
     el.setAttribute(attr, name);
     document.head.appendChild(el);
   }
   el.setAttribute("content", content);
+}
+
+function Fallback() {
+  return (
+    <div
+      className="min-h-screen w-full bg-[#f8f8f2] flex items-center justify-center"
+      aria-busy="true"
+    >
+      <div className="w-10 h-10 border-4 border-[#7c695d]/20 border-t-[#7c695d] rounded-full animate-spin" />
+    </div>
+  );
 }
 
 export default function App() {
@@ -68,6 +91,10 @@ export default function App() {
     setMeta("og:url", canonical, "property");
     setMeta("twitter:title", title);
     setMeta("twitter:description", description);
+    setMeta(
+      "robots",
+      company ? "noindex, nofollow" : "noindex, nofollow"
+    );
 
     let canonicalEl = document.querySelector(
       'link[rel="canonical"]'
@@ -81,8 +108,20 @@ export default function App() {
   }, [company, activeVariant, variant]);
 
   if (!company) {
-    return <CompanyIndex />;
+    return (
+      <Suspense fallback={<Fallback />}>
+        <PasswordGate>
+          <Suspense fallback={<Fallback />}>
+            <CompanyIndex />
+          </Suspense>
+        </PasswordGate>
+      </Suspense>
+    );
   }
 
-  return <SeedcarePage company={company} variant={activeVariant} />;
+  return (
+    <Suspense fallback={<Fallback />}>
+      <SeedcarePage company={company} variant={activeVariant} />
+    </Suspense>
+  );
 }
