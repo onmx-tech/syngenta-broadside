@@ -35,10 +35,65 @@ create table if not exists public.broadside_site_content (
 
 insert into public.broadside_site_content (id) values (1) on conflict (id) do nothing;
 
+-- Soft delete em companies (restaura por 30 dias).
+alter table public.broadside_companies
+  add column if not exists deleted_at timestamptz;
+
+create index if not exists broadside_companies_deleted_idx
+  on public.broadside_companies (deleted_at);
+
+-- Histórico de site_content (snapshot a cada update).
+create table if not exists public.broadside_site_content_history (
+  id          bigserial primary key,
+  snapshot    jsonb not null,
+  changed_at  timestamptz not null default now(),
+  changed_by  text
+);
+
+create index if not exists broadside_site_content_history_changed_at_idx
+  on public.broadside_site_content_history (changed_at desc);
+
+-- Trigger: ao UPDATE em site_content, snapshota o estado ANTERIOR.
+create or replace function public.broadside_snapshot_site_content() returns trigger
+language plpgsql security definer
+as $$
+declare
+  email_v text;
+begin
+  begin
+    email_v := coalesce(
+      (auth.jwt() ->> 'email'),
+      (current_setting('request.jwt.claim.email', true))
+    );
+  exception when others then
+    email_v := null;
+  end;
+  insert into public.broadside_site_content_history (snapshot, changed_by)
+  values (
+    jsonb_build_object(
+      'links', OLD.links,
+      'download_links', OLD.download_links,
+      'block_images', OLD.block_images,
+      'seals', OLD.seals,
+      'settings', OLD.settings,
+      'updated_at', OLD.updated_at
+    ),
+    email_v
+  );
+  return NEW;
+end;
+$$;
+
+drop trigger if exists broadside_site_content_snapshot on public.broadside_site_content;
+create trigger broadside_site_content_snapshot
+  before update on public.broadside_site_content
+  for each row execute function public.broadside_snapshot_site_content();
+
 -- ---------- Row Level Security ----------
 
-alter table public.broadside_companies    enable row level security;
-alter table public.broadside_site_content enable row level security;
+alter table public.broadside_companies            enable row level security;
+alter table public.broadside_site_content         enable row level security;
+alter table public.broadside_site_content_history enable row level security;
 
 -- Leitura pública (site público usa a anon key)
 drop policy if exists "broadside public read companies" on public.broadside_companies;
@@ -57,6 +112,15 @@ create policy "broadside auth write companies" on public.broadside_companies
 drop policy if exists "broadside auth write content" on public.broadside_site_content;
 create policy "broadside auth write content" on public.broadside_site_content
   for all to authenticated using (true) with check (true);
+
+-- Histórico: só authenticated lê/escreve (escrita normal vem do trigger; admin pode limpar manualmente)
+drop policy if exists "broadside auth read history" on public.broadside_site_content_history;
+create policy "broadside auth read history" on public.broadside_site_content_history
+  for select to authenticated using (true);
+
+drop policy if exists "broadside auth delete history" on public.broadside_site_content_history;
+create policy "broadside auth delete history" on public.broadside_site_content_history
+  for delete to authenticated using (true);
 
 -- ---------- Storage (imagens: logos, blocos, selos) ----------
 

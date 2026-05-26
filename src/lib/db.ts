@@ -7,11 +7,26 @@ import {
 
 // ===== companies =====
 
+/** Lista todas as empresas ativas (não deletadas). */
 export async function fetchCompanies(): Promise<DBCompany[]> {
   const { data, error } = await supabase
     .from("broadside_companies")
     .select("*")
+    .is("deleted_at", null)
     .order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as DBCompany[];
+}
+
+/** Lixeira: empresas deletadas nos últimos 30 dias. */
+export async function fetchDeletedCompanies(): Promise<DBCompany[]> {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("broadside_companies")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .gte("deleted_at", cutoff)
+    .order("deleted_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as DBCompany[];
 }
@@ -25,7 +40,9 @@ export type CompanyUpsert = {
 };
 
 export async function upsertCompany(payload: CompanyUpsert): Promise<DBCompany> {
-  const row = payload.id ? payload : { ...payload, id: undefined };
+  const row = payload.id
+    ? { ...payload, deleted_at: null }
+    : { ...payload, id: undefined };
   const { data, error } = await supabase
     .from("broadside_companies")
     .upsert(row, { onConflict: "slug" })
@@ -35,8 +52,33 @@ export async function upsertCompany(payload: CompanyUpsert): Promise<DBCompany> 
   return data as DBCompany;
 }
 
+/** Soft delete: marca deleted_at. Restaurável por 30 dias. */
 export async function deleteCompany(id: string): Promise<void> {
-  const { error } = await supabase.from("broadside_companies").delete().eq("id", id);
+  const { error } = await supabase
+    .from("broadside_companies")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/** Restaura uma empresa soft-deleted (limpa deleted_at). */
+export async function restoreCompany(id: string): Promise<DBCompany> {
+  const { data, error } = await supabase
+    .from("broadside_companies")
+    .update({ deleted_at: null })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as DBCompany;
+}
+
+/** Apaga definitivamente (sem volta). */
+export async function hardDeleteCompany(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("broadside_companies")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -100,3 +142,50 @@ export async function upsertSiteContent(patch: SiteContentPatch): Promise<DBSite
 }
 
 export { DEFAULT_SITE_CONTENT };
+
+// ===== histórico de site_content =====
+
+export type SiteContentSnapshot = {
+  id: number;
+  snapshot: {
+    links: DBSiteContent["links"];
+    download_links: DBSiteContent["download_links"];
+    block_images: DBSiteContent["block_images"];
+    seals: DBSiteContent["seals"];
+    settings: DBSiteContent["settings"];
+    updated_at?: string;
+  };
+  changed_at: string;
+  changed_by: string | null;
+};
+
+/** Snapshots do site_content (mais recente primeiro, últimos 30 dias). */
+export async function fetchSiteContentHistory(limit = 50): Promise<SiteContentSnapshot[]> {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("broadside_site_content_history")
+    .select("id, snapshot, changed_at, changed_by")
+    .gte("changed_at", cutoff)
+    .order("changed_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as SiteContentSnapshot[];
+}
+
+/** Restaura o site_content a partir de um snapshot do histórico. */
+export async function restoreSiteContentSnapshot(snapshotId: number): Promise<DBSiteContent> {
+  const { data: row, error: fetchErr } = await supabase
+    .from("broadside_site_content_history")
+    .select("snapshot")
+    .eq("id", snapshotId)
+    .single();
+  if (fetchErr) throw fetchErr;
+  const s = (row as { snapshot: SiteContentSnapshot["snapshot"] }).snapshot;
+  return upsertSiteContent({
+    links: s.links,
+    download_links: s.download_links,
+    block_images: s.block_images,
+    seals: s.seals,
+    settings: s.settings,
+  });
+}

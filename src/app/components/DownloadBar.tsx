@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import type { Variant } from "../../data/companies";
 
 type Props = {
@@ -28,49 +27,20 @@ const SUBLABEL =
   "Selo, post, modelo, e-mail, figurinhas, flyer, banner e outdoor";
 
 export function DownloadBar({ variant, href }: Props) {
-  const [visible, setVisible] = useState(false);
   const isEmpty = href.trim() === "";
   const palette = PALETTE[variant];
   const copy = COPY[variant];
-
-  useEffect(() => {
-    function update() {
-      const y = window.scrollY;
-      if (y > 150) {
-        setVisible(true);
-      } else if (y < 50) {
-        setVisible(false);
-      }
-    }
-    update();
-
-    const fallbackTimer = window.setTimeout(() => {
-      const doc = document.documentElement;
-      if (doc.scrollHeight <= window.innerHeight + 10) {
-        setVisible(true);
-      }
-    }, 400);
-
-    window.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
-    return () => {
-      window.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-      window.clearTimeout(fallbackTimer);
-    };
-  }, []);
 
   return (
     <aside
       role="complementary"
       aria-label={`Baixar materiais do pacote ${copy.ariaName}`}
-      className="fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-out"
+      className="fixed bottom-0 left-0 right-0 z-50"
       style={{
         backgroundColor: palette.bg,
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         boxShadow: "0 -8px 24px rgba(0,0,0,0.12)",
-        transform: visible ? "translateY(0)" : "translateY(100%)",
       }}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-8 md:px-10 py-3 sm:py-0 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 sm:min-h-[72px] min-h-[64px]">

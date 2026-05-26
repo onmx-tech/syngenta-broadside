@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   ADMIN_BLOCK_KEYS,
   ADMIN_BLOCK_LABELS,
@@ -17,6 +18,7 @@ export function AdminAssets({ admin }: Props) {
   async function updateBlockImage(key: AdminBlockKey, file: File | null) {
     if (!file) return;
     setBusyKey(`block:${key}`);
+    const toastId = toast.loading(`Enviando ${ADMIN_BLOCK_LABELS[key]}…`);
     try {
       const url = await uploadBlockImage(active, key, file);
       setSiteContent((s) => ({
@@ -26,8 +28,12 @@ export function AdminAssets({ admin }: Props) {
           [active]: { ...s.blockImages[active], [key]: url },
         },
       }));
+      toast.success(`${ADMIN_BLOCK_LABELS[key]} atualizado`, { id: toastId });
     } catch (e) {
-      alert(`Falha no upload: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error("Falha no upload", {
+        id: toastId,
+        description: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setBusyKey(null);
     }
@@ -47,14 +53,19 @@ export function AdminAssets({ admin }: Props) {
   async function updateSeal(file: File | null) {
     if (!file) return;
     setBusyKey("seal");
+    const toastId = toast.loading("Enviando selo…");
     try {
       const url = await uploadSeal(active, file);
       setSiteContent((s) => ({
         ...s,
         seals: { ...s.seals, [active]: url },
       }));
+      toast.success("Selo atualizado", { id: toastId });
     } catch (e) {
-      alert(`Falha no upload: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error("Falha no upload", {
+        id: toastId,
+        description: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setBusyKey(null);
     }

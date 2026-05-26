@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   ADMIN_INITIAL_STATE,
   type AdminCompany,
@@ -12,6 +13,7 @@ import {
   fetchSiteContent,
   upsertCompany as dbUpsertCompany,
   upsertSiteContent,
+  restoreCompany as dbRestoreCompany,
 } from "../../lib/db";
 import {
   hasSupabase,
@@ -112,11 +114,13 @@ type Status = "idle" | "loading" | "saving" | "saved" | "error";
 
 export type UseAdminState = {
   state: AdminState;
+  initialLoading: boolean;
   setSiteContent: (
     updater: AdminSiteContent | ((s: AdminSiteContent) => AdminSiteContent)
   ) => void;
   saveCompany: (input: Omit<AdminCompany, "createdAt">) => Promise<void>;
   removeCompany: (id: string) => Promise<void>;
+  restoreCompany: (id: string) => Promise<void>;
   reload: () => Promise<void>;
   status: Status;
   error: string | null;
@@ -126,12 +130,14 @@ const SAVE_DEBOUNCE_MS = 700;
 
 export function useAdminState(): UseAdminState {
   const [state, setState] = useState<AdminState>(ADMIN_INITIAL_STATE);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const pendingSite = useRef<AdminSiteContent | null>(null);
   const saveTimer = useRef<number | null>(null);
   const mounted = useRef(true);
+  const firstLoad = useRef(true);
 
   useEffect(() => {
     mounted.current = true;
@@ -144,9 +150,10 @@ export function useAdminState(): UseAdminState {
   const reload = useCallback(async () => {
     if (!hasSupabase) {
       setStatus("idle");
+      setInitialLoading(false);
       return;
     }
-    setStatus("loading");
+    if (!firstLoad.current) setStatus("loading");
     setError(null);
     try {
       const [companies, site] = await Promise.all([
@@ -161,8 +168,15 @@ export function useAdminState(): UseAdminState {
       setStatus("idle");
     } catch (e) {
       if (!mounted.current) return;
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
       setStatus("error");
+      toast.error("Falha ao carregar dados", { description: msg });
+    } finally {
+      if (mounted.current) {
+        setInitialLoading(false);
+        firstLoad.current = false;
+      }
     }
   }, []);
 
@@ -188,8 +202,10 @@ export function useAdminState(): UseAdminState {
       }, 1200);
     } catch (e) {
       if (!mounted.current) return;
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
       setStatus("error");
+      toast.error("Falha ao salvar", { description: msg });
     }
   }, []);
 
@@ -225,8 +241,10 @@ export function useAdminState(): UseAdminState {
 
   const saveCompany: UseAdminState["saveCompany"] = useCallback(async (input) => {
     if (!hasSupabase) {
-      setError("Supabase não configurado — configure VITE_SUPABASE_URL.");
+      const msg = "Supabase não configurado.";
+      setError(msg);
       setStatus("error");
+      toast.error(msg);
       return;
     }
     setStatus("saving");
@@ -251,43 +269,117 @@ export function useAdminState(): UseAdminState {
         };
       });
       setStatus("saved");
+      toast.success(
+        existing ? `“${saved.name}” atualizada` : `“${saved.name}” criada`
+      );
       window.setTimeout(() => {
         if (mounted.current) setStatus("idle");
       }, 1200);
     } catch (e) {
       if (!mounted.current) return;
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
       setStatus("error");
+      toast.error("Não consegui salvar a empresa", { description: msg });
+      throw e;
     }
   }, [state.companies]);
 
   const removeCompany: UseAdminState["removeCompany"] = useCallback(async (id) => {
-    if (!hasSupabase) {
-      setError("Supabase não configurado.");
-      setStatus("error");
-      return;
-    }
-    setStatus("saving");
+    if (!hasSupabase) return;
+    const victim = state.companies.find((c) => c.id === id);
+    if (!victim) return;
+    // Optimistic: remove imediatamente da lista.
+    setState((prev) => ({
+      ...prev,
+      companies: prev.companies.filter((c) => c.id !== id),
+    }));
     try {
       await dbDeleteCompany(id);
+      toast.success(`“${victim.name}” movida para a lixeira`, {
+        description: "Pode restaurar dentro de 30 dias.",
+        action: {
+          label: "Desfazer",
+          onClick: () => {
+            // Restaura em background; o estado vai voltar quando confirmar.
+            void (async () => {
+              try {
+                const restored = await dbRestoreCompany(id);
+                if (!mounted.current) return;
+                setState((prev) => ({
+                  ...prev,
+                  companies: [...prev.companies, dbToAdminCompany(restored)].sort(
+                    (a, b) => a.name.localeCompare(b.name, "pt-BR")
+                  ),
+                }));
+                toast.success(`“${victim.name}” restaurada`);
+              } catch (e) {
+                toast.error("Não consegui restaurar", {
+                  description: e instanceof Error ? e.message : String(e),
+                });
+              }
+            })();
+          },
+        },
+      });
+    } catch (e) {
+      // Rollback: empresa volta pra lista
+      if (mounted.current) {
+        setState((prev) => ({
+          ...prev,
+          companies: [...prev.companies, victim].sort((a, b) =>
+            a.name.localeCompare(b.name, "pt-BR")
+          ),
+        }));
+      }
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("Não consegui remover", { description: msg });
+    }
+  }, [state.companies]);
+
+  const restoreCompany: UseAdminState["restoreCompany"] = useCallback(async (id) => {
+    if (!hasSupabase) return;
+    try {
+      const restored = await dbRestoreCompany(id);
       if (!mounted.current) return;
       setState((prev) => ({
         ...prev,
-        companies: prev.companies.filter((c) => c.id !== id),
+        companies: [
+          ...prev.companies.filter((c) => c.id !== restored.id),
+          dbToAdminCompany(restored),
+        ].sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
       }));
-      setStatus("saved");
-      window.setTimeout(() => {
-        if (mounted.current) setStatus("idle");
-      }, 1200);
+      toast.success(`“${restored.name}” restaurada`);
     } catch (e) {
-      if (!mounted.current) return;
-      setError(e instanceof Error ? e.message : String(e));
-      setStatus("error");
+      toast.error("Não consegui restaurar", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+      throw e;
     }
   }, []);
 
   return useMemo(
-    () => ({ state, setSiteContent, saveCompany, removeCompany, reload, status, error }),
-    [state, setSiteContent, saveCompany, removeCompany, reload, status, error]
+    () => ({
+      state,
+      initialLoading,
+      setSiteContent,
+      saveCompany,
+      removeCompany,
+      restoreCompany,
+      reload,
+      status,
+      error,
+    }),
+    [
+      state,
+      initialLoading,
+      setSiteContent,
+      saveCompany,
+      removeCompany,
+      restoreCompany,
+      reload,
+      status,
+      error,
+    ]
   );
 }
