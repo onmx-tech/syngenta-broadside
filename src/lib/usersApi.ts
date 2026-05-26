@@ -26,10 +26,14 @@ async function jsonOrThrow(res: Response): Promise<any> {
     /* not json */
   }
   if (!res.ok) {
-    const msg = body?.error ?? res.statusText ?? `HTTP ${res.status}`;
-    throw new Error(msg);
+    const msg =
+      body?.error ??
+      (text && text.length < 240
+        ? text.replace(/\s+/g, " ").trim()
+        : `HTTP ${res.status} ${res.statusText || ""}`.trim());
+    throw new Error(msg || `HTTP ${res.status}`);
   }
-  return body;
+  return body ?? {};
 }
 
 export async function listUsers(): Promise<AdminUser[]> {

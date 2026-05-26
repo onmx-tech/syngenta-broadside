@@ -8,8 +8,27 @@ import {
 } from "./types";
 import { uploadBlockImage, uploadSeal, type UseAdminState } from "./storage";
 import { errorMessage } from "../../lib/errors";
+import { blocks as defaultBlocks } from "../../data/blocks";
+import imgSeloSeedcare from "../../assets/blocks/logo_excelencia_seedcare.png";
+import imgSeloEsg from "../../assets/blocks/logo_excelencia_seedcare_esg.png";
 
 type Props = { admin: UseAdminState };
+
+const defaultSealByVariant: Record<AdminVariant, string> = {
+  seedcare: imgSeloSeedcare,
+  esg: imgSeloEsg,
+};
+
+const defaultBlockImageByVariant: Record<AdminVariant, Record<AdminBlockKey, string>> = {
+  seedcare: defaultBlocks.reduce((acc, b) => {
+    acc[b.key as AdminBlockKey] = b.images.seedcare;
+    return acc;
+  }, {} as Record<AdminBlockKey, string>),
+  esg: defaultBlocks.reduce((acc, b) => {
+    acc[b.key as AdminBlockKey] = b.images.esg;
+    return acc;
+  }, {} as Record<AdminBlockKey, string>),
+};
 
 export function AdminAssets({ admin }: Props) {
   const { state, setSiteContent } = admin;
@@ -49,6 +68,7 @@ export function AdminAssets({ admin }: Props) {
         blockImages: { ...s.blockImages, [active]: next },
       };
     });
+    toast.success("Voltou pra imagem padrão");
   }
 
   async function updateSeal(file: File | null) {
@@ -77,6 +97,7 @@ export function AdminAssets({ admin }: Props) {
       ...s,
       seals: { ...s.seals, [active]: null },
     }));
+    toast.success("Voltou pro selo padrão");
   }
 
   return (
@@ -86,7 +107,8 @@ export function AdminAssets({ admin }: Props) {
           Imagens
         </h2>
         <p className="text-[#7c695d] text-[14px] mt-1">
-          Imagens dos cards e do selo central, por variante.
+          Sobrescreva o selo central e os 8 cards. Por padrão, mostra a versão
+          empacotada no site.
         </p>
       </header>
 
@@ -115,7 +137,8 @@ export function AdminAssets({ admin }: Props) {
           Aparece no callout marrom logo abaixo da saudação.
         </p>
         <SealUploader
-          url={state.seals[active]}
+          customUrl={state.seals[active]}
+          defaultUrl={defaultSealByVariant[active]}
           busy={busyKey === "seal"}
           onChange={updateSeal}
           onClear={clearSeal}
@@ -134,7 +157,8 @@ export function AdminAssets({ admin }: Props) {
             <BlockUploader
               key={key}
               blockKey={key}
-              url={state.blockImages[active][key] ?? null}
+              customUrl={state.blockImages[active][key] ?? null}
+              defaultUrl={defaultBlockImageByVariant[active][key]}
               busy={busyKey === `block:${key}`}
               onChange={(file) => updateBlockImage(key, file)}
               onClear={() => clearBlockImage(key)}
@@ -146,30 +170,53 @@ export function AdminAssets({ admin }: Props) {
   );
 }
 
+function DefaultBadge() {
+  return (
+    <span
+      className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-white/85 text-[#7c695d] backdrop-blur"
+      title="Imagem padrão do site (vinda do bundle). Envie pra sobrescrever."
+    >
+      padrão
+    </span>
+  );
+}
+
+function CustomBadge() {
+  return (
+    <span
+      className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-[#7dbf44]/95 text-[#0d0904] backdrop-blur"
+      title="Imagem customizada — sobrescreve o padrão."
+    >
+      custom
+    </span>
+  );
+}
+
 function SealUploader({
-  url,
+  customUrl,
+  defaultUrl,
   busy,
   onChange,
   onClear,
 }: {
-  url: string | null;
+  customUrl: string | null;
+  defaultUrl: string;
   busy: boolean;
   onChange: (file: File | null) => void;
   onClear: () => void;
 }) {
   const ref = useRef<HTMLInputElement | null>(null);
+  const isCustom = !!customUrl;
+  const displayUrl = customUrl ?? defaultUrl;
   return (
-    <div className="flex items-center gap-4">
-      <div className="w-24 h-24 rounded-xl bg-[#765827] border border-[#7c695d]/15 flex items-center justify-center overflow-hidden shrink-0">
-        {url ? (
-          <img
-            src={url}
-            alt=""
-            className="max-w-full max-h-full object-contain"
-          />
-        ) : (
-          <span className="text-white/40 text-[10px]">vazio</span>
-        )}
+    <div className="flex items-center gap-4 flex-wrap">
+      <div className="relative w-24 h-24 rounded-xl bg-[#765827] border border-[#7c695d]/15 flex items-center justify-center overflow-hidden shrink-0">
+        <img
+          src={displayUrl}
+          alt=""
+          className="max-w-full max-h-full object-contain"
+        />
+        {isCustom ? <CustomBadge /> : <DefaultBadge />}
       </div>
       <input
         ref={ref}
@@ -185,16 +232,16 @@ function SealUploader({
           disabled={busy}
           className="px-3 py-2 rounded-lg bg-[#7c695d]/10 hover:bg-[#7c695d]/20 text-[#7c695d] text-[13px] font-medium disabled:opacity-50"
         >
-          {busy ? "Enviando…" : url ? "Trocar" : "Enviar"}
+          {busy ? "Enviando…" : isCustom ? "Trocar" : "Personalizar"}
         </button>
-        {url && (
+        {isCustom && (
           <button
             type="button"
             onClick={onClear}
             disabled={busy}
-            className="px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[13px] font-medium disabled:opacity-50"
+            className="px-3 py-2 rounded-lg text-[#a07a3a] hover:bg-[#a07a3a]/10 text-[13px] font-medium disabled:opacity-50"
           >
-            Remover
+            Voltar padrão
           </button>
         )}
       </div>
@@ -204,33 +251,34 @@ function SealUploader({
 
 function BlockUploader({
   blockKey,
-  url,
+  customUrl,
+  defaultUrl,
   busy,
   onChange,
   onClear,
 }: {
   blockKey: AdminBlockKey;
-  url: string | null;
+  customUrl: string | null;
+  defaultUrl: string;
   busy: boolean;
   onChange: (file: File | null) => void;
   onClear: () => void;
 }) {
   const ref = useRef<HTMLInputElement | null>(null);
+  const isCustom = !!customUrl;
+  const displayUrl = customUrl ?? defaultUrl;
   return (
     <li className="bg-[#f8f8f2] rounded-xl border border-[#7c695d]/10 p-3">
       <p className="text-[#1a1208] text-[12px] font-medium mb-2 truncate">
         {ADMIN_BLOCK_LABELS[blockKey]}
       </p>
-      <div className="aspect-[252/316] bg-[#765827] rounded-lg overflow-hidden flex items-center justify-center mb-2">
-        {url ? (
-          <img
-            src={url}
-            alt=""
-            className="max-w-full max-h-full object-contain p-2"
-          />
-        ) : (
-          <span className="text-white/40 text-[10px]">vazio</span>
-        )}
+      <div className="relative aspect-[252/316] bg-[#765827] rounded-lg overflow-hidden flex items-center justify-center mb-2">
+        <img
+          src={displayUrl}
+          alt=""
+          className="max-w-full max-h-full object-contain p-2"
+        />
+        {isCustom ? <CustomBadge /> : <DefaultBadge />}
       </div>
       <input
         ref={ref}
@@ -246,16 +294,18 @@ function BlockUploader({
           disabled={busy}
           className="flex-1 px-2 py-1.5 rounded-md bg-[#7c695d]/10 hover:bg-[#7c695d]/20 text-[#7c695d] text-[11px] font-medium disabled:opacity-50"
         >
-          {busy ? "…" : url ? "Trocar" : "Enviar"}
+          {busy ? "…" : isCustom ? "Trocar" : "Personalizar"}
         </button>
-        {url && (
+        {isCustom && (
           <button
             type="button"
             onClick={onClear}
             disabled={busy}
-            className="px-2 py-1.5 rounded-md text-red-600 hover:bg-red-50 text-[11px] font-medium disabled:opacity-50"
+            aria-label="Voltar pra padrão"
+            title="Voltar pra padrão"
+            className="px-2 py-1.5 rounded-md text-[#a07a3a] hover:bg-[#a07a3a]/10 disabled:opacity-50"
           >
-            ×
+            ↺
           </button>
         )}
       </div>

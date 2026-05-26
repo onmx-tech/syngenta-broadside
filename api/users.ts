@@ -6,51 +6,43 @@
 //
 // Autorização: exige header `Authorization: Bearer <jwt>` de qualquer usuário
 // autenticado no Supabase (modelo flat — quem entra no admin pode gerenciar
-// outros usuários). Verificação feita via supabase.auth.getUser(token).
+// outros). Verificação via supabase.auth.getUser(token).
 
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-function json(body: unknown, init: number | ResponseInit = 200): Response {
-  const status = typeof init === "number" ? init : init?.status ?? 200;
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
-async function authorize(req: Request): Promise<
+async function authorize(req: VercelRequest, res: VercelResponse): Promise<
   | { ok: true; userId: string; email: string; admin: SupabaseClient }
-  | { ok: false; res: Response }
+  | { ok: false }
 > {
   if (!SUPABASE_URL || !ANON_KEY || !SERVICE_KEY) {
-    return {
-      ok: false,
-      res: json({ error: "Server missing Supabase env vars." }, 500),
-    };
+    res.status(500).json({ error: "Server missing Supabase env vars." });
+    return { ok: false };
   }
 
-  const auth = req.headers.get("authorization") ?? "";
-  const token = auth.toLowerCase().startsWith("bearer ")
-    ? auth.slice(7).trim()
+  const authHeader = req.headers["authorization"];
+  const headerValue = Array.isArray(authHeader) ? authHeader[0] : authHeader ?? "";
+  const token = headerValue.toLowerCase().startsWith("bearer ")
+    ? headerValue.slice(7).trim()
     : "";
   if (!token) {
-    return { ok: false, res: json({ error: "Missing bearer token." }, 401) };
+    res.status(401).json({ error: "Missing bearer token." });
+    return { ok: false };
   }
 
-  // Valida o token com a anon key (sem persistência).
   const validator = createClient(SUPABASE_URL, ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data, error } = await validator.auth.getUser(token);
   if (error || !data?.user) {
-    return { ok: false, res: json({ error: "Invalid token." }, 401) };
+    res.status(401).json({ error: "Invalid token." });
+    return { ok: false };
   }
 
-  // Cliente admin com service_role (server-side apenas).
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -63,9 +55,9 @@ async function authorize(req: Request): Promise<
   };
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  const auth = await authorize(req);
-  if (!auth.ok) return auth.res;
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const auth = await authorize(req, res);
+  if (!auth.ok) return;
   const { admin, userId: callerId } = auth;
 
   try {
@@ -86,21 +78,21 @@ export default async function handler(req: Request): Promise<Response> {
         .sort((a, b) =>
           (a.email ?? "").localeCompare(b.email ?? "", "pt-BR")
         );
-      return json({ users });
+      return res.status(200).json({ users });
     }
 
     if (req.method === "POST") {
-      const body = await req.json().catch(() => ({})) as {
-        email?: string;
-        password?: string;
-      };
+      const body =
+        typeof req.body === "string"
+          ? (JSON.parse(req.body || "{}") as { email?: string; password?: string })
+          : ((req.body ?? {}) as { email?: string; password?: string });
       const email = (body.email ?? "").trim().toLowerCase();
       const password = body.password ?? "";
       if (!email || !email.includes("@")) {
-        return json({ error: "Email inválido." }, 400);
+        return res.status(400).json({ error: "Email inválido." });
       }
       if (password.length < 8) {
-        return json({ error: "Senha deve ter pelo menos 8 caracteres." }, 400);
+        return res.status(400).json({ error: "Senha deve ter pelo menos 8 caracteres." });
       }
       const { data, error } = await admin.auth.admin.createUser({
         email,
@@ -109,32 +101,36 @@ export default async function handler(req: Request): Promise<Response> {
       });
       if (error) {
         const status = /already/i.test(error.message) ? 409 : 400;
-        return json({ error: error.message }, status);
+        return res.status(status).json({ error: error.message });
       }
-      return json({
+      return res.status(201).json({
         user: {
           id: data.user.id,
           email: data.user.email,
           created_at: data.user.created_at,
         },
-      }, 201);
+      });
     }
 
     if (req.method === "DELETE") {
-      const url = new URL(req.url);
-      const id = url.searchParams.get("id");
-      if (!id) return json({ error: "Missing id query param." }, 400);
+      const id =
+        typeof req.query.id === "string"
+          ? req.query.id
+          : Array.isArray(req.query.id)
+            ? req.query.id[0]
+            : "";
+      if (!id) return res.status(400).json({ error: "Missing id query param." });
       if (id === callerId) {
-        return json({ error: "Você não pode excluir sua própria conta." }, 400);
+        return res.status(400).json({ error: "Você não pode excluir sua própria conta." });
       }
       const { error } = await admin.auth.admin.deleteUser(id);
-      if (error) return json({ error: error.message }, 400);
-      return json({ ok: true });
+      if (error) return res.status(400).json({ error: error.message });
+      return res.status(200).json({ ok: true });
     }
 
-    return json({ error: "Method not allowed." }, 405);
+    return res.status(405).json({ error: "Method not allowed." });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    return json({ error: message }, 500);
+    return res.status(500).json({ error: message });
   }
 }
