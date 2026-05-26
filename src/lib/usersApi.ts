@@ -4,6 +4,8 @@ import { supabase } from "./supabase";
 
 export type AdminUser = {
   id: string;
+  /** Nome de exibição (username quando interno, email completo quando externo) */
+  username: string;
   email: string | null;
   created_at: string;
   last_sign_in_at: string | null;
@@ -43,7 +45,7 @@ export async function listUsers(): Promise<AdminUser[]> {
 }
 
 export async function createUser(input: {
-  email: string;
+  username: string;
   password: string;
 }): Promise<AdminUser> {
   const res = await fetch("/api/users", {

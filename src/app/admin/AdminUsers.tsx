@@ -17,13 +17,24 @@ function relativeDate(iso: string | null): string {
   return d.toLocaleDateString("pt-BR");
 }
 
+const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,30}$/;
+
+function normalizeUsername(raw: string): string {
+  return raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9._-]+/g, "")
+    .slice(0, 31);
+}
+
 export function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
   const [showPwd, setShowPwd] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ username: "", password: "" });
   const [busy, setBusy] = useState(false);
 
   async function reload() {
@@ -46,19 +57,19 @@ export function AdminUsers() {
     setBusy(true);
     try {
       const created = await createUser({
-        email: form.email.trim(),
+        username: form.username.trim(),
         password: form.password,
       });
       setUsers((prev) =>
-        [...(prev ?? []), { ...created, last_sign_in_at: null, is_self: false }].sort(
-          (a, b) => (a.email ?? "").localeCompare(b.email ?? "", "pt-BR")
+        [...(prev ?? []).filter((u) => u.id !== created.id), { ...created, last_sign_in_at: null, is_self: false }].sort(
+          (a, b) => a.username.localeCompare(b.username, "pt-BR")
         )
       );
-      toast.success(`Convite criado para ${created.email}`, {
-        description: `Senha: ${form.password} — envie pra pessoa.`,
-        duration: 10_000,
+      toast.success(`Usuário ${created.username} criado`, {
+        description: `Senha: ${form.password} — envie pra pessoa por canal seguro.`,
+        duration: 12_000,
       });
-      setForm({ email: "", password: "" });
+      setForm({ username: "", password: "" });
       setCreating(false);
     } catch (e) {
       const msg = errorMessage(e);
@@ -136,19 +147,24 @@ export function AdminUsers() {
               >
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-[14px] font-bold"
-                  style={{ backgroundColor: stringToColor(u.email ?? "?") }}
+                  style={{ backgroundColor: stringToColor(u.username) }}
                   aria-hidden
                 >
-                  {(u.email ?? "?").slice(0, 1).toUpperCase()}
+                  {u.username.slice(0, 1).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-[#1a1208] truncate text-[14px]">
-                      {u.email}
+                      {u.username}
                     </span>
                     {u.is_self && (
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-[#7dbf44]/20 text-[#3a6a1c]">
                         você
+                      </span>
+                    )}
+                    {u.email?.includes("@") && !u.email.endsWith("@broadside.local") && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-[#7c695d]/10 text-[#7c695d]">
+                        email
                       </span>
                     )}
                   </div>
@@ -207,24 +223,31 @@ export function AdminUsers() {
                 Novo usuário
               </h3>
               <p className="text-[#7c695d] text-[13px] mb-5">
-                A pessoa entra com email + senha que você definir.
+                A pessoa entra com este nome de usuário + a senha que você definir.
               </p>
 
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="newEmail" className="block text-[13px] font-medium text-[#7c695d] mb-1.5">
-                    Email
+                  <label htmlFor="newUsername" className="block text-[13px] font-medium text-[#7c695d] mb-1.5">
+                    Nome de usuário
                   </label>
                   <input
-                    id="newEmail"
-                    type="email"
+                    id="newUsername"
+                    type="text"
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     autoComplete="off"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full px-3 py-2.5 rounded-lg border border-[#7c695d]/25 focus:outline-none focus:ring-2 focus:ring-[#7dbf44]"
+                    value={form.username}
+                    onChange={(e) => setForm({ ...form, username: normalizeUsername(e.target.value) })}
+                    placeholder="ex: maria, joao.silva, equipe-2026"
+                    className="w-full px-3 py-2.5 rounded-lg border border-[#7c695d]/25 font-mono text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#7dbf44]"
                     autoFocus
                   />
+                  <p className="text-[#7c695d]/60 text-[11px] mt-1">
+                    Só letras, números, ponto, traço ou underline. 2 a 31 caracteres.
+                  </p>
                 </div>
 
                 <div>
@@ -274,7 +297,7 @@ export function AdminUsers() {
                 </button>
                 <button
                   type="submit"
-                  disabled={busy || !form.email.trim() || form.password.length < 8}
+                  disabled={busy || !USERNAME_RE.test(form.username) || form.password.length < 8}
                   className="flex-1 px-4 py-2.5 rounded-xl bg-[#7dbf44] hover:bg-[#6ba838] disabled:opacity-40 disabled:cursor-not-allowed text-[#0d0904] font-bold transition-colors"
                 >
                   {busy ? "Criando…" : "Criar usuário"}

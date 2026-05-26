@@ -42,8 +42,20 @@ export async function removeAsset(path: string): Promise<void> {
 
 // ===== Auth =====
 
-export async function signIn(email: string, password: string): Promise<Session> {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+/** Domínio interno usado para usuários criados via username (sem email real). */
+export const INTERNAL_AUTH_DOMAIN = "broadside.local";
+
+/** Resolve identifier (username sem @ ou email completo) pra email aceito pelo Supabase. */
+export function identifierToEmail(identifier: string): string {
+  const trimmed = identifier.trim().toLowerCase();
+  return trimmed.includes("@") ? trimmed : `${trimmed}@${INTERNAL_AUTH_DOMAIN}`;
+}
+
+export async function signIn(identifier: string, password: string): Promise<Session> {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: identifierToEmail(identifier),
+    password,
+  });
   if (error) throw error;
   if (!data.session) throw new Error("Login sem sessão.");
   return data.session;

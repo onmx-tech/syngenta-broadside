@@ -134,15 +134,18 @@ function AdminGate() {
           }}
         >
           <label htmlFor="aemail" className="sr-only">
-            Email
+            Usuário ou email
           </label>
           <input
             id="aemail"
-            type="email"
+            type="text"
             autoFocus
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             autoComplete="username"
             value={email}
-            placeholder="email@exemplo.com"
+            placeholder="usuário ou email"
             onChange={(e) => {
               setEmail(e.target.value);
               if (error) setError(null);
