@@ -1,5 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { getCompanyBySlug, type Variant } from "../data/companies";
+import {
+  bootstrapCompanies,
+  getCompanyBySlugIn,
+  useCompanies,
+  type Variant,
+} from "../data/companies";
+import { bootstrapSiteContent } from "../data/siteContent";
+import { hasSupabase } from "../lib/supabase";
 
 const SeedcarePage = lazy(() =>
   import("./components/SeedcarePage").then((m) => ({ default: m.SeedcarePage }))
@@ -57,11 +64,20 @@ function Fallback() {
 
 export default function App() {
   const [{ broadside, variant, admin }, setParams] = useState(readQueryParams);
+  const [bootstrapping, setBootstrapping] = useState(hasSupabase);
+  const companies = useCompanies();
 
   useEffect(() => {
     const onChange = () => setParams(readQueryParams());
     window.addEventListener("popstate", onChange);
     return () => window.removeEventListener("popstate", onChange);
+  }, []);
+
+  useEffect(() => {
+    if (!hasSupabase) return;
+    Promise.all([bootstrapCompanies(), bootstrapSiteContent()]).finally(() =>
+      setBootstrapping(false)
+    );
   }, []);
 
   if (admin) {
@@ -72,7 +88,7 @@ export default function App() {
     );
   }
 
-  const company = broadside ? getCompanyBySlug(broadside) : null;
+  const company = broadside ? getCompanyBySlugIn(companies, broadside) : null;
   const activeVariant: Variant = company
     ? variant === "esg" || variant === "seedcare"
       ? variant
@@ -105,10 +121,7 @@ export default function App() {
     setMeta("og:url", canonical, "property");
     setMeta("twitter:title", title);
     setMeta("twitter:description", description);
-    setMeta(
-      "robots",
-      company ? "noindex, nofollow" : "noindex, nofollow"
-    );
+    setMeta("robots", "noindex, nofollow");
 
     let canonicalEl = document.querySelector(
       'link[rel="canonical"]'
@@ -120,6 +133,12 @@ export default function App() {
     }
     canonicalEl.setAttribute("href", canonical);
   }, [company, activeVariant, variant]);
+
+  // Broadside solicitado mas ainda carregando o banco — aguarda antes de mostrar
+  // o index (que poderia "esconder" uma empresa que existe no Supabase).
+  if (broadside && !company && bootstrapping) {
+    return <Fallback />;
+  }
 
   if (!company) {
     return (

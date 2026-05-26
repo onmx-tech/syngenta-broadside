@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { companies, type Variant } from "../../data/companies";
+import { useCompanies, type Variant } from "../../data/companies";
 import imgHeader from "../../imports/SySeedcareBroadsidePreview/3a986b7adf9d5b37201789977d57a957178e3cf0.png";
 
 const variantLabel: Record<Variant, string> = {
@@ -13,6 +13,7 @@ const variantBadge: Record<Variant, string> = {
 };
 
 export function CompanyIndex() {
+  const companies = useCompanies();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | Variant>("all");
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function CompanyIndex() {
       const matchesV = filter === "all" || c.variant === filter;
       return matchesQ && matchesV;
     });
-  }, [query, filter]);
+  }, [companies, query, filter]);
 
   return (
     <div className="min-h-screen w-full bg-[#f8f8f2]">

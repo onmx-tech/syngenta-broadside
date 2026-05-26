@@ -1,17 +1,17 @@
 import { BrownCard } from "./BrownCard";
-import { blocks, blockLinks } from "../../data/blocks";
+import { blocks } from "../../data/blocks";
 import type { Company, Variant } from "../../data/companies";
+import {
+  resolveBlockImage,
+  resolveDownloadHref,
+  resolveSeal,
+  useSiteContent,
+} from "../../data/siteContent";
 import imgHeader from "../../imports/SySeedcareBroadsidePreview/3a986b7adf9d5b37201789977d57a957178e3cf0.png";
 import imgHero from "../../imports/SySeedcareBroadsidePreview/d935914b8bbc43fd0fc68c6209dd122bd62f2cf2.png";
 import imgFooter from "../../imports/SySeedcareBroadsidePreview/f56fbc1eeaa2ab80af596323ab794f976d675e04.png";
-import imgSeloSeedcare from "../../assets/blocks/logo_excelencia_seedcare.png";
-import imgSeloEsg from "../../assets/blocks/logo_excelencia_seedcare_esg.png";
 import { CasaLogo } from "./CasaLogo";
-
-const seloByVariant: Record<Variant, string> = {
-  seedcare: imgSeloSeedcare,
-  esg: imgSeloEsg,
-};
+import { DownloadBar } from "./DownloadBar";
 
 type Props = {
   company: Company;
@@ -19,8 +19,11 @@ type Props = {
 };
 
 export function SeedcarePage({ company, variant }: Props) {
+  const siteContent = useSiteContent();
+  const sealUrl = resolveSeal(siteContent, variant);
+  const downloadHref = resolveDownloadHref(siteContent, variant);
   return (
-    <div className="min-h-screen w-full bg-[#f8f8f2] pb-8 sm:pb-10">
+    <div className="min-h-screen w-full bg-[#f8f8f2] pb-[96px] sm:pb-[112px]">
       <div className="mx-auto w-full max-w-[900px] bg-[#f8f8f2] rounded-b-[25px] overflow-hidden shadow-sm">
         <header className="bg-white">
           <img
@@ -135,28 +138,14 @@ export function SeedcarePage({ company, variant }: Props) {
         </section>
 
         <section className="px-4 sm:px-10 md:px-14 mt-2">
-          <a
-            href={blockLinks[variant].selo}
-            target={
-              blockLinks[variant].selo.startsWith("http")
-                ? "_blank"
-                : undefined
-            }
-            rel={
-              blockLinks[variant].selo.startsWith("http")
-                ? "noopener noreferrer"
-                : undefined
-            }
-            className="block transition-transform hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-[#7dbf44] rounded-[30px]"
-          >
-            <BrownCard rounded="rounded-[30px]" className="w-full">
-              <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 p-6 sm:p-8 md:p-10">
+          <BrownCard rounded="rounded-[30px]" className="w-full">
+            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 p-6 sm:p-8 md:p-10">
               <div className="flex flex-col items-center gap-3 shrink-0">
                 <p className="text-[#e4e4d0] font-['Inter',sans-serif] font-medium text-[16px] sm:text-[18px]">
                   Selo Sacaria
                 </p>
                 <img
-                  src={seloByVariant[variant]}
+                  src={sealUrl}
                   alt="Selo de Excelência Seedcare"
                   loading="lazy"
                   decoding="async"
@@ -167,9 +156,8 @@ export function SeedcarePage({ company, variant }: Props) {
                 Você provou, mais uma vez, que sua sementeira é sinônimo de
                 excelência no tratamento de sementes, parabéns!
               </p>
-              </div>
-            </BrownCard>
-          </a>
+            </div>
+          </BrownCard>
         </section>
 
         <p className="text-center text-[#7c695d] font-['Inter',sans-serif] font-medium text-[15px] sm:text-[17px] leading-[1.4] px-8 sm:px-16 py-8 sm:py-10 max-w-[640px] mx-auto">
@@ -180,17 +168,10 @@ export function SeedcarePage({ company, variant }: Props) {
         <section className="px-4 sm:px-10 md:px-14 pb-8 sm:pb-10">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
             {blocks.map((block) => {
-              const href = blockLinks[variant][block.key];
-              const spanClass =
-                block.span === 2 ? "md:col-span-2" : "";
+              const spanClass = block.span === 2 ? "md:col-span-2" : "";
+              const imageSrc = resolveBlockImage(siteContent, block, variant);
               return (
-                <a
-                  key={block.key}
-                  href={href}
-                  target={href.startsWith("http") ? "_blank" : undefined}
-                  rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
-                  className={`block group transition-transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-[#7dbf44] rounded-[18px] ${spanClass}`}
-                >
+                <div key={block.key} className={spanClass}>
                   <BrownCard
                     className={`w-full ${
                       block.span === 2
@@ -226,7 +207,7 @@ export function SeedcarePage({ company, variant }: Props) {
                         }`}
                       >
                         <img
-                          src={block.images[variant]}
+                          src={imageSrc}
                           alt={block.label}
                           loading="lazy"
                           decoding="async"
@@ -251,7 +232,7 @@ export function SeedcarePage({ company, variant }: Props) {
                       </div>
                     </div>
                   </BrownCard>
-                </a>
+                </div>
               );
             })}
           </div>
@@ -282,6 +263,8 @@ export function SeedcarePage({ company, variant }: Props) {
           </div>
         </footer>
       </div>
+
+      <DownloadBar variant={variant} href={downloadHref} />
     </div>
   );
 }

@@ -1,3 +1,7 @@
+import { useSyncExternalStore } from "react";
+import { fetchCompanies } from "../lib/db";
+import { hasSupabase } from "../lib/supabase";
+
 export type Variant = "seedcare" | "esg";
 
 export type Company = {
@@ -6,6 +10,8 @@ export type Company = {
   logoUrl: string;
   variant: Variant;
 };
+
+// ---------- fallback estático (logos empacotadas) ----------
 
 const logoModules = import.meta.glob<{ default: string }>(
   "../assets/logos/*.png",
@@ -63,7 +69,7 @@ const esgCompanies: ReadonlySet<string> = new Set([
   "coamo",
 ]);
 
-export const companies: Company[] = Object.entries(logoByFilename)
+const staticCompanies: Company[] = Object.entries(logoByFilename)
   .map(([filename, logoUrl]): Company => {
     const name = prettyName(filename);
     const slug = slugify(name) || slugify(filename);
@@ -72,11 +78,82 @@ export const companies: Company[] = Object.entries(logoByFilename)
   })
   .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
-export const defaultCompany: Company =
-  companies.find((c) => c.slug === "cotrijal") ?? companies[0];
+// ---------- store reativa ----------
 
-export function getCompanyBySlug(slug: string | null | undefined): Company {
-  if (!slug) return defaultCompany;
+let snapshot: Company[] = staticCompanies;
+const listeners = new Set<() => void>();
+
+function setCompanies(next: Company[]) {
+  snapshot = next;
+  for (const l of listeners) l();
+}
+
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
+}
+
+function getSnapshot() {
+  return snapshot;
+}
+
+// Bootstrap em background: substitui a snapshot quando o DB responde.
+let bootstrapped = false;
+export function bootstrapCompanies(): Promise<void> {
+  if (bootstrapped || !hasSupabase) return Promise.resolve();
+  bootstrapped = true;
+  return fetchCompanies()
+    .then((rows) => {
+      if (rows.length === 0) return;
+      const mapped: Company[] = rows
+        .map((c) => ({
+          slug: c.slug,
+          name: c.name,
+          logoUrl: c.logo_url ?? "",
+          variant: c.variant,
+        }))
+        .filter((c) => c.logoUrl !== "")
+        .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+      if (mapped.length > 0) setCompanies(mapped);
+    })
+    .catch((e) => {
+      console.warn("[companies] fallback estático — falha lendo Supabase:", e);
+    });
+}
+
+// ---------- API pública ----------
+
+/** Snapshot reativo (atualiza quando o DB responde). */
+export function useCompanies(): Company[] {
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/** Compatibilidade: acesso síncrono ao snapshot atual. */
+export const companies = new Proxy([] as Company[], {
+  get(_t, prop) {
+    return Reflect.get(snapshot, prop);
+  },
+  has(_t, prop) {
+    return Reflect.has(snapshot, prop);
+  },
+}) as Company[];
+
+export function getDefaultCompany(list: Company[] = snapshot): Company | null {
+  return list.find((c) => c.slug === "cotrijal") ?? list[0] ?? null;
+}
+
+export function getCompanyBySlugIn(
+  list: Company[],
+  slug: string | null | undefined
+): Company | null {
+  if (!slug) return getDefaultCompany(list);
   const target = slugify(slug);
-  return companies.find((c) => c.slug === target) ?? defaultCompany;
+  return list.find((c) => c.slug === target) ?? null;
+}
+
+/** Mantém a assinatura antiga, mas pode retornar null quando ainda não há nenhuma empresa carregada. */
+export function getCompanyBySlug(slug: string | null | undefined): Company | null {
+  return getCompanyBySlugIn(snapshot, slug);
 }

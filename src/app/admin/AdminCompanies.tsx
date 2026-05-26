@@ -1,27 +1,31 @@
-import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { AdminCompany, AdminState, AdminVariant } from "./types";
-import { fileToDataUrl, genId, slugify } from "./storage";
+import { useMemo, useRef, useState } from "react";
+import type { AdminCompany, AdminVariant } from "./types";
+import { genId, slugify, uploadLogo } from "./storage";
+import type { UseAdminState } from "./storage";
 
-type Props = {
-  state: AdminState;
-  setState: Dispatch<SetStateAction<AdminState>>;
+type Props = { admin: UseAdminState };
+
+type EditingCompany = Omit<AdminCompany, "createdAt"> & {
+  isNew: boolean;
+  /** Arquivo selecionado mas ainda não enviado; será subido no Save. */
+  pendingLogoFile?: File | null;
 };
-
-type EditingCompany = Omit<AdminCompany, "createdAt"> & { isNew: boolean };
 
 const empty = (): EditingCompany => ({
   id: genId(),
   slug: "",
   name: "",
-  logoDataUrl: null,
+  logoUrl: null,
   variant: "seedcare",
   isNew: true,
 });
 
-export function AdminCompanies({ state, setState }: Props) {
+export function AdminCompanies({ admin }: Props) {
+  const { state, saveCompany, removeCompany } = admin;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | AdminVariant>("all");
   const [editing, setEditing] = useState<EditingCompany | null>(null);
+  const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const filtered = useMemo(() => {
@@ -36,35 +40,38 @@ export function AdminCompanies({ state, setState }: Props) {
     });
   }, [state.companies, query, filter]);
 
-  function save(c: EditingCompany) {
+  async function save(c: EditingCompany) {
     if (!c.name.trim() || !c.slug.trim()) return;
-    setState((s) => {
-      const others = s.companies.filter((o) => o.id !== c.id);
-      const company: AdminCompany = {
+    setBusy(true);
+    try {
+      let logoUrl = c.logoUrl;
+      if (c.pendingLogoFile) {
+        logoUrl = await uploadLogo(c.slug, c.pendingLogoFile);
+      }
+      await saveCompany({
         id: c.id,
         slug: c.slug,
         name: c.name,
-        logoDataUrl: c.logoDataUrl,
+        logoUrl,
         variant: c.variant,
-        createdAt: new Date().toISOString(),
-      };
-      return { ...s, companies: [...others, company] };
-    });
-    setEditing(null);
+      });
+      setEditing(null);
+    } catch (e) {
+      alert(`Erro ao salvar: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
     if (!confirm("Remover esta empresa?")) return;
-    setState((s) => ({
-      ...s,
-      companies: s.companies.filter((c) => c.id !== id),
-    }));
+    await removeCompany(id);
   }
 
-  async function onLogoChange(file: File | null) {
+  function onLogoChange(file: File | null) {
     if (!editing || !file) return;
-    const dataUrl = await fileToDataUrl(file);
-    setEditing({ ...editing, logoDataUrl: dataUrl });
+    const previewUrl = URL.createObjectURL(file);
+    setEditing({ ...editing, pendingLogoFile: file, logoUrl: previewUrl });
   }
 
   return (
@@ -134,9 +141,9 @@ export function AdminCompanies({ state, setState }: Props) {
               className="bg-white border border-[#7c695d]/15 rounded-xl p-3 flex items-center gap-3"
             >
               <div className="w-14 h-14 rounded-lg bg-[#f8f8f2] border border-[#7c695d]/10 flex items-center justify-center shrink-0 overflow-hidden">
-                {c.logoDataUrl ? (
+                {c.logoUrl ? (
                   <img
-                    src={c.logoDataUrl}
+                    src={c.logoUrl}
                     alt=""
                     className="max-w-full max-h-full object-contain"
                   />
@@ -171,7 +178,7 @@ export function AdminCompanies({ state, setState }: Props) {
                       id: c.id,
                       slug: c.slug,
                       name: c.name,
-                      logoDataUrl: c.logoDataUrl,
+                      logoUrl: c.logoUrl,
                       variant: c.variant,
                       isNew: false,
                     })
@@ -198,7 +205,7 @@ export function AdminCompanies({ state, setState }: Props) {
       {editing && (
         <div
           className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-          onClick={() => setEditing(null)}
+          onClick={() => !busy && setEditing(null)}
         >
           <div
             className="bg-white rounded-2xl max-w-[480px] w-full p-6 sm:p-8"
@@ -275,9 +282,9 @@ export function AdminCompanies({ state, setState }: Props) {
                 </label>
                 <div className="flex items-center gap-3">
                   <div className="w-20 h-20 rounded-lg bg-[#f8f8f2] border border-[#7c695d]/15 flex items-center justify-center overflow-hidden shrink-0">
-                    {editing.logoDataUrl ? (
+                    {editing.logoUrl ? (
                       <img
-                        src={editing.logoDataUrl}
+                        src={editing.logoUrl}
                         alt=""
                         className="max-w-full max-h-full object-contain"
                       />
@@ -297,18 +304,23 @@ export function AdminCompanies({ state, setState }: Props) {
                     onClick={() => fileRef.current?.click()}
                     className="px-3 py-2 rounded-lg bg-[#7c695d]/10 hover:bg-[#7c695d]/20 text-[#7c695d] text-[13px] font-medium"
                   >
-                    {editing.logoDataUrl ? "Trocar" : "Enviar"}
+                    {editing.logoUrl ? "Trocar" : "Enviar"}
                   </button>
-                  {editing.logoDataUrl && (
+                  {editing.logoUrl && (
                     <button
                       type="button"
-                      onClick={() => setEditing({ ...editing, logoDataUrl: null })}
+                      onClick={() => setEditing({ ...editing, logoUrl: null, pendingLogoFile: null })}
                       className="px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[13px] font-medium"
                     >
                       Remover
                     </button>
                   )}
                 </div>
+                {editing.pendingLogoFile && (
+                  <p className="text-[11px] text-[#7c695d]/60 mt-2">
+                    Logo será enviada ao Storage quando você clicar em Salvar.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -316,17 +328,18 @@ export function AdminCompanies({ state, setState }: Props) {
               <button
                 type="button"
                 onClick={() => setEditing(null)}
-                className="flex-1 px-4 py-2.5 rounded-lg border border-[#7c695d]/25 text-[#7c695d] font-medium"
+                disabled={busy}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-[#7c695d]/25 text-[#7c695d] font-medium disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={() => save(editing)}
-                disabled={!editing.name.trim() || !editing.slug.trim()}
+                disabled={busy || !editing.name.trim() || !editing.slug.trim()}
                 className="flex-1 px-4 py-2.5 rounded-lg bg-[#7dbf44] hover:bg-[#6ba838] disabled:opacity-40 disabled:cursor-not-allowed text-[#0d0904] font-bold"
               >
-                Salvar
+                {busy ? "Salvando…" : "Salvar"}
               </button>
             </div>
           </div>

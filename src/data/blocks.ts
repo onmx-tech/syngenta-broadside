@@ -1,5 +1,4 @@
 import type { Variant } from "./companies";
-
 import imgSelo from "../assets/blocks/logo_excelencia_seedcare.png";
 import imgSeloEsg from "../assets/blocks/logo_excelencia_seedcare_esg.png";
 import imgPost from "../assets/blocks/post.png";
@@ -92,25 +91,29 @@ export const blocks: Block[] = [
   },
 ];
 
+
+// [legado] Link por card — preservado durante a migração pra download bar.
+// Não é mais lido pelo site público (cards viraram vitrine, sem clique).
+// "#" = ainda sem link.
 export const blockLinks: Record<Variant, Record<BlockKey, string>> = {
   seedcare: {
-    selo: "#",
-    post: "#",
-    modelo: "#",
-    email: "#",
-    figurinhas: "#",
-    flyer: "#",
-    banner: "#",
-    outdoor: "#",
+    selo: "#", // 01 - Selo de Excelência   (arquivo a enviar)
+    post: "#", // 02 - Post Carrossel
+    modelo: "#", // 03 - Modelo de Apresentação
+    email: "#", // 04 - E-mail mkt produtor
+    figurinhas: "#", // 05 - Figurinhas WhatsApp  (arquivo a enviar)
+    flyer: "#", // 06 - Flyer
+    banner: "#", // 07 - Banner
+    outdoor: "#", // 08 - Mini Outdoor
   },
   esg: {
-    selo: "#",
-    post: "#",
-    modelo: "#",
-    email: "#",
-    figurinhas: "#",
-    flyer: "#",
-    banner: "#",
-    outdoor: "#",
+    selo: "#", // 01 - Selo de Excelência
+    post: "#", // 02 - Post Carrossel
+    modelo: "#", // 03 - Modelo de Apresentação
+    email: "#", // 04 - E-mail mkt produtor
+    figurinhas: "#", // 05 - Figurinhas WhatsApp
+    flyer: "#", // 06 - Flyer
+    banner: "#", // 07 - Banner
+    outdoor: "#", // 08 - Mini Outdoor
   },
 };

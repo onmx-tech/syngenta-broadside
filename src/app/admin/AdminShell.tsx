@@ -1,23 +1,12 @@
 import { useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { useAdminState } from "./storage";
 import { AdminCompanies } from "./AdminCompanies";
 import { AdminLinks } from "./AdminLinks";
 import { AdminAssets } from "./AdminAssets";
 import { AdminSettings } from "./AdminSettings";
+import { hasSupabase, signIn, signOut, supabase } from "../../lib/supabase";
 import imgSelo from "../../assets/blocks/logo_excelencia_seedcare.png";
-
-const ADMIN_AUTH_KEY = "seedcare_admin_auth";
-// SHA-256("admin-seedcare-2026")
-const EXPECTED_HASH =
-  "6c005695fa4f963ffedb676752b575e9d496106a64c3ca992f87d96378a755d4";
-
-async function hashPassword(pwd: string): Promise<string> {
-  const data = new TextEncoder().encode(pwd.trim());
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 type Tab = "companies" | "links" | "assets" | "settings";
 
@@ -52,25 +41,25 @@ const tabs: { id: Tab; label: string; icon: JSX.Element }[] = [
   },
 ];
 
-function AdminGate({ onAuth }: { onAuth: () => void }) {
+function AdminGate() {
+  const [email, setEmail] = useState("");
   const [pwd, setPwd] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!hasSupabase) {
+      setError("Supabase não configurado. Preencha VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const hash = await hashPassword(pwd);
-      if (hash === EXPECTED_HASH) {
-        try {
-          sessionStorage.setItem(ADMIN_AUTH_KEY, "1");
-        } catch {}
-        onAuth();
-      } else {
-        setError("Senha incorreta.");
-      }
+      await signIn(email.trim(), pwd);
+      // onAuthStateChange no AdminShell vai redirecionar.
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha no login.");
     } finally {
       setSubmitting(false);
     }
@@ -84,7 +73,7 @@ function AdminGate({ onAuth }: { onAuth: () => void }) {
           "radial-gradient(circle at 50% 0%, #2f2415 0%, #1a1208 60%, #0d0904 100%)",
       }}
     >
-      <form onSubmit={submit} className="w-full max-w-[380px]" autoComplete="off" noValidate>
+      <form onSubmit={submit} className="w-full max-w-[380px]" autoComplete="on" noValidate>
         <div className="flex flex-col items-center mb-8">
           <img
             src={imgSelo}
@@ -99,20 +88,35 @@ function AdminGate({ onAuth }: { onAuth: () => void }) {
           </p>
         </div>
         <div
-          className="rounded-2xl p-6 sm:p-8"
+          className="rounded-2xl p-6 sm:p-8 space-y-3"
           style={{
             background: "rgba(255,255,255,0.04)",
             border: "1px solid rgba(228,228,208,0.12)",
             boxShadow: "0 20px 40px rgba(0,0,0,0.35)",
           }}
         >
+          <label htmlFor="aemail" className="sr-only">
+            Email
+          </label>
+          <input
+            id="aemail"
+            type="email"
+            autoFocus
+            autoComplete="username"
+            value={email}
+            placeholder="email@exemplo.com"
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (error) setError(null);
+            }}
+            className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/15 text-[#fffeeb] placeholder:text-white/30 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#7dbf44] focus:border-[#7dbf44] transition-colors"
+          />
           <label htmlFor="apwd" className="sr-only">
             Senha
           </label>
           <input
             id="apwd"
             type="password"
-            autoFocus
             autoComplete="current-password"
             value={pwd}
             placeholder="••••••••"
@@ -124,14 +128,14 @@ function AdminGate({ onAuth }: { onAuth: () => void }) {
             className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/15 text-[#fffeeb] placeholder:text-white/30 text-[15px] tracking-[0.4em] text-center focus:outline-none focus:ring-2 focus:ring-[#7dbf44] focus:border-[#7dbf44] transition-colors"
           />
           {error && (
-            <p role="alert" className="mt-3 text-[13px] text-[#ff8a8a] text-center">
+            <p role="alert" className="text-[13px] text-[#ff8a8a] text-center">
               {error}
             </p>
           )}
           <button
             type="submit"
-            disabled={submitting || pwd.length === 0}
-            className="mt-4 w-full px-4 py-3.5 rounded-xl bg-[#7dbf44] hover:bg-[#6ba838] disabled:opacity-40 disabled:cursor-not-allowed text-[#0d0904] font-bold text-[15px] transition-colors focus:outline-none focus:ring-2 focus:ring-[#fffeeb]/40"
+            disabled={submitting || pwd.length === 0 || email.length === 0}
+            className="w-full px-4 py-3.5 rounded-xl bg-[#7dbf44] hover:bg-[#6ba838] disabled:opacity-40 disabled:cursor-not-allowed text-[#0d0904] font-bold text-[15px] transition-colors focus:outline-none focus:ring-2 focus:ring-[#fffeeb]/40"
           >
             {submitting ? "..." : "Entrar"}
           </button>
@@ -141,8 +145,30 @@ function AdminGate({ onAuth }: { onAuth: () => void }) {
   );
 }
 
-function AdminBody({ logout }: { logout: () => void }) {
-  const { state, setState } = useAdminState();
+function StatusBadge({
+  status,
+  error,
+}: {
+  status: "idle" | "loading" | "saving" | "saved" | "error";
+  error: string | null;
+}) {
+  if (status === "loading")
+    return <span className="text-[12px] text-[#7c695d]/70">Carregando…</span>;
+  if (status === "saving")
+    return <span className="text-[12px] text-[#7c695d]/70">Salvando…</span>;
+  if (status === "saved")
+    return <span className="text-[12px] text-[#3a6a1c]">Salvo ✓</span>;
+  if (status === "error")
+    return (
+      <span className="text-[12px] text-red-600" title={error ?? ""}>
+        Erro {error ? `· ${error.slice(0, 80)}` : ""}
+      </span>
+    );
+  return null;
+}
+
+function AdminBody({ session, logout }: { session: Session; logout: () => void }) {
+  const admin = useAdminState();
   const [tab, setTab] = useState<Tab>(() => {
     const stored = sessionStorage.getItem("seedcare_admin_tab");
     return (stored as Tab) ?? "companies";
@@ -157,10 +183,13 @@ function AdminBody({ logout }: { logout: () => void }) {
       <aside className="md:w-64 md:min-h-screen bg-[#1a1208] text-[#e4e4d0] flex md:flex-col">
         <div className="hidden md:flex items-center gap-3 px-5 pt-6 pb-8">
           <img src={imgSelo} alt="" className="w-9 h-9 object-contain" />
-          <div>
+          <div className="min-w-0">
             <p className="text-[15px] font-bold text-white">Seedcare</p>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/40">
-              Admin
+            <p
+              className="text-[10px] uppercase tracking-[0.2em] text-white/40 truncate"
+              title={session.user.email ?? "Admin"}
+            >
+              {session.user.email ?? "Admin"}
             </p>
           </div>
         </div>
@@ -199,23 +228,21 @@ function AdminBody({ logout }: { logout: () => void }) {
       </aside>
 
       <main className="flex-1 p-5 sm:p-8 md:p-10 max-w-[1100px]">
-        {tab === "companies" && <AdminCompanies state={state} setState={setState} />}
-        {tab === "links" && <AdminLinks state={state} setState={setState} />}
-        {tab === "assets" && <AdminAssets state={state} setState={setState} />}
-        {tab === "settings" && <AdminSettings state={state} setState={setState} />}
+        <div className="flex justify-end mb-3 min-h-[18px]">
+          <StatusBadge status={admin.status} error={admin.error} />
+        </div>
+        {tab === "companies" && <AdminCompanies admin={admin} />}
+        {tab === "links" && <AdminLinks admin={admin} />}
+        {tab === "assets" && <AdminAssets admin={admin} />}
+        {tab === "settings" && <AdminSettings admin={admin} />}
       </main>
     </div>
   );
 }
 
 export function AdminShell() {
-  const [authed, setAuthed] = useState(() => {
-    try {
-      return sessionStorage.getItem(ADMIN_AUTH_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const [session, setSession] = useState<Session | null>(null);
+  const [bootstrapped, setBootstrapped] = useState(false);
 
   useEffect(() => {
     document.title = "Admin • Broadside Seedcare";
@@ -223,14 +250,37 @@ export function AdminShell() {
     if (meta) meta.setAttribute("content", "noindex, nofollow");
   }, []);
 
-  if (!authed) return <AdminGate onAuth={() => setAuthed(true)} />;
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      setSession(data.session);
+      setBootstrapped(true);
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess);
+    });
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
 
-  return (
-    <AdminBody
-      logout={() => {
-        sessionStorage.removeItem(ADMIN_AUTH_KEY);
-        setAuthed(false);
-      }}
-    />
-  );
+  if (!bootstrapped) {
+    return (
+      <div
+        className="min-h-screen w-full flex items-center justify-center"
+        style={{
+          background:
+            "radial-gradient(circle at 50% 0%, #2f2415 0%, #1a1208 60%, #0d0904 100%)",
+        }}
+      >
+        <div className="w-10 h-10 border-4 border-white/20 border-t-[#7dbf44] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!session) return <AdminGate />;
+
+  return <AdminBody session={session} logout={() => signOut()} />;
 }

@@ -1,14 +1,13 @@
-import type { Dispatch, SetStateAction } from "react";
-import type { AdminState, AdminSettings as AdminSettingsType } from "./types";
+import type { AdminSettings as AdminSettingsType } from "./types";
+import type { UseAdminState } from "./storage";
 
-type Props = {
-  state: AdminState;
-  setState: Dispatch<SetStateAction<AdminState>>;
-};
+type Props = { admin: UseAdminState };
 
-export function AdminSettings({ state, setState }: Props) {
+export function AdminSettings({ admin }: Props) {
+  const { state, setSiteContent, reload } = admin;
+
   function update<K extends keyof AdminSettingsType>(key: K, value: AdminSettingsType[K]) {
-    setState((s) => ({
+    setSiteContent((s) => ({
       ...s,
       settings: { ...s.settings, [key]: value },
     }));
@@ -24,31 +23,6 @@ export function AdminSettings({ state, setState }: Props) {
     a.download = `seedcare-admin-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }
-
-  function importJson() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "application/json";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const parsed = JSON.parse(text);
-        if (!confirm("Substituir todo o estado atual?")) return;
-        setState(parsed);
-      } catch (e) {
-        alert("JSON inválido.");
-      }
-    };
-    input.click();
-  }
-
-  function resetAll() {
-    if (!confirm("Apagar TODOS os dados do admin? Essa ação não tem volta.")) return;
-    localStorage.removeItem("seedcare_admin_state_v1");
-    location.reload();
   }
 
   return (
@@ -89,7 +63,7 @@ export function AdminSettings({ state, setState }: Props) {
             className="w-full px-3 py-2 rounded-lg border border-[#7c695d]/15 bg-[#f8f8f2] text-[#7c695d]/60 text-[13px]"
           />
           <p className="text-[#7c695d]/60 text-[11px] mt-1">
-            Quando conectarmos o backend, a senha vira editável aqui.
+            A senha do gate público continua no código (componente PasswordGate).
           </p>
         </div>
       </section>
@@ -149,8 +123,7 @@ export function AdminSettings({ state, setState }: Props) {
       <section className="bg-white rounded-2xl border border-[#7c695d]/15 p-5 space-y-4">
         <h3 className="font-bold text-[#1a1208] text-[16px]">Backup</h3>
         <p className="text-[#7c695d] text-[12px]">
-          Exporte o estado pra um JSON pra você editar à mão e mandar pra mim,
-          ou importe um JSON pra restaurar.
+          Exporta o estado atual em JSON pra arquivo.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -162,25 +135,13 @@ export function AdminSettings({ state, setState }: Props) {
           </button>
           <button
             type="button"
-            onClick={importJson}
+            onClick={reload}
             className="px-4 py-2 rounded-lg bg-[#7c695d]/10 hover:bg-[#7c695d]/20 text-[#7c695d] text-[13px] font-medium"
           >
-            Importar JSON
-          </button>
-          <button
-            type="button"
-            onClick={resetAll}
-            className="px-4 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[13px] font-medium ml-auto"
-          >
-            Apagar tudo
+            Recarregar do banco
           </button>
         </div>
       </section>
-
-      <div className="bg-[#7dbf44]/10 border border-[#7dbf44]/30 rounded-xl p-4 text-[13px] text-[#3a6a1c]">
-        <strong>Desconectado</strong> — nada aqui mexe no site público ainda.
-        Quando você liberar a Fase 2, ligamos o admin no backend.
-      </div>
     </div>
   );
 }

@@ -1,99 +1,82 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
-import {
-  ADMIN_BLOCK_KEYS,
-  ADMIN_BLOCK_LABELS,
-  type AdminBlockKey,
-  type AdminState,
-  type AdminVariant,
-} from "./types";
+import type { AdminVariant } from "./types";
+import type { UseAdminState } from "./storage";
 
-type Props = {
-  state: AdminState;
-  setState: Dispatch<SetStateAction<AdminState>>;
-};
+type Props = { admin: UseAdminState };
 
-export function AdminLinks({ state, setState }: Props) {
-  const [active, setActive] = useState<AdminVariant>("seedcare");
+const FIELDS: { variant: AdminVariant; label: string; placeholder: string }[] = [
+  {
+    variant: "seedcare",
+    label: "Pacote Seedcare",
+    placeholder: "https://drive.google.com/drive/folders/...",
+  },
+  {
+    variant: "esg",
+    label: "Pacote ESG",
+    placeholder: "https://drive.google.com/drive/folders/...",
+  },
+];
 
-  function update(key: AdminBlockKey, url: string) {
-    setState((s) => ({
+export function AdminLinks({ admin }: Props) {
+  const { state, setSiteContent } = admin;
+
+  function update(variant: AdminVariant, url: string) {
+    setSiteContent((s) => ({
       ...s,
-      links: {
-        ...s.links,
-        [active]: { ...s.links[active], [key]: url },
-      },
+      downloadLinks: { ...s.downloadLinks, [variant]: url },
     }));
-  }
-
-  function copyAll() {
-    setState((s) => {
-      const other: AdminVariant = active === "seedcare" ? "esg" : "seedcare";
-      return {
-        ...s,
-        links: { ...s.links, [other]: { ...s.links[active] } },
-      };
-    });
   }
 
   return (
     <div className="space-y-6">
       <header>
         <h2 className="font-bold text-[#1a1208] text-[22px] sm:text-[26px]">
-          Links dos blocos
+          Links de download
         </h2>
         <p className="text-[#7c695d] text-[14px] mt-1">
-          URL pra qual cada um dos 8 cards leva ao ser clicado.
+          URL do Drive de cada pacote.
         </p>
       </header>
 
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="inline-flex bg-[#7c695d]/10 rounded-xl p-1">
-          {(["seedcare", "esg"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setActive(v)}
-              className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
-                active === v
-                  ? "bg-white text-[#1a1208] shadow-sm"
-                  : "text-[#7c695d]"
-              }`}
-            >
-              {v === "seedcare" ? "Seedcare" : "ESG"}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={copyAll}
-          className="text-[13px] text-[#7c695d] hover:text-[#1a1208] underline underline-offset-2"
-        >
-          Copiar pra variante {active === "seedcare" ? "ESG" : "Seedcare"}
-        </button>
-      </div>
-
       <div className="bg-white rounded-2xl border border-[#7c695d]/15 divide-y divide-[#7c695d]/10">
-        {ADMIN_BLOCK_KEYS.map((key) => (
-          <div key={key} className="p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-            <div className="sm:w-48 shrink-0">
-              <p className="font-medium text-[#1a1208] text-[14px]">
-                {ADMIN_BLOCK_LABELS[key]}
-              </p>
-              <p className="text-[#7c695d]/60 text-[11px] font-mono">{key}</p>
+        {FIELDS.map(({ variant, label, placeholder }) => {
+          const value = state.downloadLinks[variant];
+          const showHttpsHint =
+            value.trim() !== "" && !value.startsWith("https://");
+          return (
+            <div
+              key={variant}
+              className="p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4"
+            >
+              <div className="sm:w-48 shrink-0">
+                <p className="font-medium text-[#1a1208] text-[14px]">
+                  {label}
+                </p>
+                <p className="text-[#7c695d]/60 text-[11px] font-mono">
+                  {variant}
+                </p>
+              </div>
+              <div className="flex-1 flex flex-col gap-1">
+                <input
+                  type="url"
+                  placeholder={placeholder}
+                  value={value}
+                  onChange={(e) => update(variant, e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-[#7c695d]/25 bg-[#f8f8f2] text-[#1a1208] placeholder:text-[#7c695d]/40 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-[#7dbf44] focus:bg-white"
+                />
+                {showHttpsHint ? (
+                  <p className="text-[#a07a3a] text-[11px]">
+                    Sugerimos URL começando com <code>https://</code>
+                  </p>
+                ) : null}
+              </div>
             </div>
-            <input
-              type="url"
-              placeholder="https://..."
-              value={state.links[active][key]}
-              onChange={(e) => update(key, e.target.value)}
-              className="flex-1 px-3 py-2 rounded-lg border border-[#7c695d]/25 bg-[#f8f8f2] text-[#1a1208] placeholder:text-[#7c695d]/40 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-[#7dbf44] focus:bg-white"
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div className="bg-[#7dbf44]/10 border border-[#7dbf44]/30 rounded-xl p-4 text-[13px] text-[#3a6a1c]">
-        <strong>Não conectado</strong> — esses links ainda não substituem os do código. Estão sendo salvos só no navegador (localStorage).
+      <div className="bg-[#7c695d]/5 border border-[#7c695d]/15 rounded-xl p-4 text-[13px] text-[#7c695d]">
+        O link aparece no botão “Baixar tudo” na barra inferior do broadside de
+        cada empresa.
       </div>
     </div>
   );

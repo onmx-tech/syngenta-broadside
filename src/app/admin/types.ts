@@ -4,7 +4,8 @@ export type AdminCompany = {
   id: string;
   slug: string;
   name: string;
-  logoDataUrl: string | null;
+  /** URL pública do Storage (ou data URL temporária enquanto o arquivo é processado localmente). */
+  logoUrl: string | null;
   variant: AdminVariant;
   createdAt: string;
 };
@@ -43,6 +44,8 @@ export const ADMIN_BLOCK_KEYS: AdminBlockKey[] = [
 
 export type AdminLinks = Record<AdminVariant, Record<AdminBlockKey, string>>;
 
+export type AdminDownloadLinks = Record<AdminVariant, string>;
+
 export type AdminBlockImages = Record<AdminVariant, Partial<Record<AdminBlockKey, string>>>;
 
 export type AdminSeals = Record<AdminVariant, string | null>;
@@ -56,43 +59,51 @@ export type AdminSettings = {
   textEsgCallout: string;
 };
 
-export type AdminState = {
-  companies: AdminCompany[];
+/** Apenas a parte que vai pra `site_content` (companies têm CRUD próprio). */
+export type AdminSiteContent = {
   links: AdminLinks;
+  downloadLinks: AdminDownloadLinks;
   blockImages: AdminBlockImages;
   seals: AdminSeals;
   settings: AdminSettings;
 };
 
+export type AdminState = AdminSiteContent & {
+  companies: AdminCompany[];
+};
+
+export const DEFAULT_LINKS: AdminLinks = {
+  seedcare: {
+    selo: "",
+    post: "",
+    modelo: "",
+    email: "",
+    figurinhas: "",
+    flyer: "",
+    banner: "",
+    outdoor: "",
+  },
+  esg: {
+    selo: "",
+    post: "",
+    modelo: "",
+    email: "",
+    figurinhas: "",
+    flyer: "",
+    banner: "",
+    outdoor: "",
+  },
+};
+
 export const ADMIN_INITIAL_STATE: AdminState = {
   companies: [],
-  links: {
-    seedcare: {
-      selo: "",
-      post: "",
-      modelo: "",
-      email: "",
-      figurinhas: "",
-      flyer: "",
-      banner: "",
-      outdoor: "",
-    },
-    esg: {
-      selo: "",
-      post: "",
-      modelo: "",
-      email: "",
-      figurinhas: "",
-      flyer: "",
-      banner: "",
-      outdoor: "",
-    },
-  },
+  links: DEFAULT_LINKS,
+  downloadLinks: { seedcare: "", esg: "" },
   blockImages: { seedcare: {}, esg: {} },
   seals: { seedcare: null, esg: null },
   settings: {
     canonicalBaseUrl: "https://syngenta-broadside.vercel.app",
-    indexPasswordHint: "(definida no código por enquanto)",
+    indexPasswordHint: "(definida no código)",
     textSeedcareHero:
       "Transformamos inovação em superação ao longo de gerações.",
     textEsgHero:

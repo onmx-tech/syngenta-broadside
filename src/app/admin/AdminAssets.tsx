@@ -1,35 +1,40 @@
-import { useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useRef, useState } from "react";
 import {
   ADMIN_BLOCK_KEYS,
   ADMIN_BLOCK_LABELS,
   type AdminBlockKey,
-  type AdminState,
   type AdminVariant,
 } from "./types";
-import { fileToDataUrl } from "./storage";
+import { uploadBlockImage, uploadSeal, type UseAdminState } from "./storage";
 
-type Props = {
-  state: AdminState;
-  setState: Dispatch<SetStateAction<AdminState>>;
-};
+type Props = { admin: UseAdminState };
 
-export function AdminAssets({ state, setState }: Props) {
+export function AdminAssets({ admin }: Props) {
+  const { state, setSiteContent } = admin;
   const [active, setActive] = useState<AdminVariant>("seedcare");
+  const [busyKey, setBusyKey] = useState<string | null>(null);
 
   async function updateBlockImage(key: AdminBlockKey, file: File | null) {
     if (!file) return;
-    const dataUrl = await fileToDataUrl(file);
-    setState((s) => ({
-      ...s,
-      blockImages: {
-        ...s.blockImages,
-        [active]: { ...s.blockImages[active], [key]: dataUrl },
-      },
-    }));
+    setBusyKey(`block:${key}`);
+    try {
+      const url = await uploadBlockImage(active, key, file);
+      setSiteContent((s) => ({
+        ...s,
+        blockImages: {
+          ...s.blockImages,
+          [active]: { ...s.blockImages[active], [key]: url },
+        },
+      }));
+    } catch (e) {
+      alert(`Falha no upload: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusyKey(null);
+    }
   }
 
   function clearBlockImage(key: AdminBlockKey) {
-    setState((s) => {
+    setSiteContent((s) => {
       const next = { ...s.blockImages[active] };
       delete next[key];
       return {
@@ -41,15 +46,22 @@ export function AdminAssets({ state, setState }: Props) {
 
   async function updateSeal(file: File | null) {
     if (!file) return;
-    const dataUrl = await fileToDataUrl(file);
-    setState((s) => ({
-      ...s,
-      seals: { ...s.seals, [active]: dataUrl },
-    }));
+    setBusyKey("seal");
+    try {
+      const url = await uploadSeal(active, file);
+      setSiteContent((s) => ({
+        ...s,
+        seals: { ...s.seals, [active]: url },
+      }));
+    } catch (e) {
+      alert(`Falha no upload: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusyKey(null);
+    }
   }
 
   function clearSeal() {
-    setState((s) => ({
+    setSiteContent((s) => ({
       ...s,
       seals: { ...s.seals, [active]: null },
     }));
@@ -91,7 +103,8 @@ export function AdminAssets({ state, setState }: Props) {
           Aparece no callout marrom logo abaixo da saudação.
         </p>
         <SealUploader
-          dataUrl={state.seals[active]}
+          url={state.seals[active]}
+          busy={busyKey === "seal"}
           onChange={updateSeal}
           onClear={clearSeal}
         />
@@ -109,27 +122,26 @@ export function AdminAssets({ state, setState }: Props) {
             <BlockUploader
               key={key}
               blockKey={key}
-              dataUrl={state.blockImages[active][key] ?? null}
+              url={state.blockImages[active][key] ?? null}
+              busy={busyKey === `block:${key}`}
               onChange={(file) => updateBlockImage(key, file)}
               onClear={() => clearBlockImage(key)}
             />
           ))}
         </ul>
       </section>
-
-      <div className="bg-[#7dbf44]/10 border border-[#7dbf44]/30 rounded-xl p-4 text-[13px] text-[#3a6a1c]">
-        <strong>Não conectado</strong> — imagens guardadas como base64 no localStorage. Não substituem as do código ainda.
-      </div>
     </div>
   );
 }
 
 function SealUploader({
-  dataUrl,
+  url,
+  busy,
   onChange,
   onClear,
 }: {
-  dataUrl: string | null;
+  url: string | null;
+  busy: boolean;
   onChange: (file: File | null) => void;
   onClear: () => void;
 }) {
@@ -137,9 +149,9 @@ function SealUploader({
   return (
     <div className="flex items-center gap-4">
       <div className="w-24 h-24 rounded-xl bg-[#765827] border border-[#7c695d]/15 flex items-center justify-center overflow-hidden shrink-0">
-        {dataUrl ? (
+        {url ? (
           <img
-            src={dataUrl}
+            src={url}
             alt=""
             className="max-w-full max-h-full object-contain"
           />
@@ -158,15 +170,17 @@ function SealUploader({
         <button
           type="button"
           onClick={() => ref.current?.click()}
-          className="px-3 py-2 rounded-lg bg-[#7c695d]/10 hover:bg-[#7c695d]/20 text-[#7c695d] text-[13px] font-medium"
+          disabled={busy}
+          className="px-3 py-2 rounded-lg bg-[#7c695d]/10 hover:bg-[#7c695d]/20 text-[#7c695d] text-[13px] font-medium disabled:opacity-50"
         >
-          {dataUrl ? "Trocar" : "Enviar"}
+          {busy ? "Enviando…" : url ? "Trocar" : "Enviar"}
         </button>
-        {dataUrl && (
+        {url && (
           <button
             type="button"
             onClick={onClear}
-            className="px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[13px] font-medium"
+            disabled={busy}
+            className="px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 text-[13px] font-medium disabled:opacity-50"
           >
             Remover
           </button>
@@ -178,12 +192,14 @@ function SealUploader({
 
 function BlockUploader({
   blockKey,
-  dataUrl,
+  url,
+  busy,
   onChange,
   onClear,
 }: {
   blockKey: AdminBlockKey;
-  dataUrl: string | null;
+  url: string | null;
+  busy: boolean;
   onChange: (file: File | null) => void;
   onClear: () => void;
 }) {
@@ -194,9 +210,9 @@ function BlockUploader({
         {ADMIN_BLOCK_LABELS[blockKey]}
       </p>
       <div className="aspect-[252/316] bg-[#765827] rounded-lg overflow-hidden flex items-center justify-center mb-2">
-        {dataUrl ? (
+        {url ? (
           <img
-            src={dataUrl}
+            src={url}
             alt=""
             className="max-w-full max-h-full object-contain p-2"
           />
@@ -215,15 +231,17 @@ function BlockUploader({
         <button
           type="button"
           onClick={() => ref.current?.click()}
-          className="flex-1 px-2 py-1.5 rounded-md bg-[#7c695d]/10 hover:bg-[#7c695d]/20 text-[#7c695d] text-[11px] font-medium"
+          disabled={busy}
+          className="flex-1 px-2 py-1.5 rounded-md bg-[#7c695d]/10 hover:bg-[#7c695d]/20 text-[#7c695d] text-[11px] font-medium disabled:opacity-50"
         >
-          {dataUrl ? "Trocar" : "Enviar"}
+          {busy ? "…" : url ? "Trocar" : "Enviar"}
         </button>
-        {dataUrl && (
+        {url && (
           <button
             type="button"
             onClick={onClear}
-            className="px-2 py-1.5 rounded-md text-red-600 hover:bg-red-50 text-[11px] font-medium"
+            disabled={busy}
+            className="px-2 py-1.5 rounded-md text-red-600 hover:bg-red-50 text-[11px] font-medium disabled:opacity-50"
           >
             ×
           </button>
