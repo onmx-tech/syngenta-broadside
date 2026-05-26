@@ -15,6 +15,16 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// Isolamento: só usuários com app_metadata.app === APP_KEY são considerados
+// admins do Broadside. Outros usuários do projeto Supabase compartilhado não
+// aparecem na listagem, não podem ser deletados daqui e — via RLS — não
+// conseguem escrever nas tabelas broadside_*.
+const APP_KEY = "broadside";
+
+function isBroadsideUser(u: { app_metadata?: Record<string, unknown> | null }): boolean {
+  return ((u.app_metadata as Record<string, unknown> | null)?.app as string | undefined) === APP_KEY;
+}
+
 async function authorize(req: VercelRequest, res: VercelResponse): Promise<
   | { ok: true; userId: string; email: string; admin: SupabaseClient }
   | { ok: false }
@@ -64,10 +74,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === "GET") {
       const { data, error } = await admin.auth.admin.listUsers({
         page: 1,
-        perPage: 200,
+        perPage: 1000,
       });
       if (error) throw error;
       const users = data.users
+        .filter(isBroadsideUser)
         .map((u) => ({
           id: u.id,
           email: u.email,
@@ -94,10 +105,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (password.length < 8) {
         return res.status(400).json({ error: "Senha deve ter pelo menos 8 caracteres." });
       }
+
+      // Se já existe no projeto (qualquer app), só promove ao Broadside.
+      const { data: existing } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const found = existing.users.find((u) => u.email?.toLowerCase() === email);
+      if (found) {
+        if (isBroadsideUser(found)) {
+          return res.status(409).json({ error: "Usuário já tem acesso ao Broadside." });
+        }
+        const { data: updated, error: updErr } = await admin.auth.admin.updateUserById(
+          found.id,
+          {
+            password,
+            app_metadata: { ...(found.app_metadata ?? {}), app: APP_KEY },
+            email_confirm: true,
+          }
+        );
+        if (updErr) return res.status(400).json({ error: updErr.message });
+        return res.status(200).json({
+          user: {
+            id: updated.user.id,
+            email: updated.user.email,
+            created_at: updated.user.created_at,
+          },
+        });
+      }
+
       const { data, error } = await admin.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
+        app_metadata: { app: APP_KEY },
       });
       if (error) {
         const status = /already/i.test(error.message) ? 409 : 400;
@@ -123,8 +161,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (id === callerId) {
         return res.status(400).json({ error: "Você não pode excluir sua própria conta." });
       }
-      const { error } = await admin.auth.admin.deleteUser(id);
-      if (error) return res.status(400).json({ error: error.message });
+
+      // Safety: só "tira o acesso" — não apaga do projeto (poderia afetar
+      // outras apps no mesmo Supabase). Remove a marca `broadside`.
+      const { data: target, error: getErr } = await admin.auth.admin.getUserById(id);
+      if (getErr || !target?.user) {
+        return res.status(404).json({ error: "Usuário não encontrado." });
+      }
+      if (!isBroadsideUser(target.user)) {
+        return res.status(403).json({ error: "Usuário não pertence ao Broadside." });
+      }
+      const nextMeta = { ...(target.user.app_metadata ?? {}) };
+      delete (nextMeta as Record<string, unknown>).app;
+      const { error: updErr } = await admin.auth.admin.updateUserById(id, {
+        app_metadata: nextMeta,
+      });
+      if (updErr) return res.status(400).json({ error: updErr.message });
       return res.status(200).json({ ok: true });
     }
 

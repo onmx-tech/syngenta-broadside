@@ -34,13 +34,14 @@ async function main() {
   const existing = list.users.find((u) => u.email === ADMIN_EMAIL);
 
   if (existing) {
-    console.log(`Usuário ${ADMIN_EMAIL} já existe — atualizando senha…`);
+    console.log(`Usuário ${ADMIN_EMAIL} já existe — atualizando senha + marcando como admin…`);
     const { error } = await supabase.auth.admin.updateUserById(existing.id, {
       password: ADMIN_PASSWORD,
       email_confirm: true,
+      app_metadata: { ...(existing.app_metadata ?? {}), app: "broadside" },
     });
     if (error) throw error;
-    console.log("✅ Senha atualizada.");
+    console.log("✅ Senha atualizada e marca app:broadside aplicada.");
     return;
   }
 
@@ -49,6 +50,7 @@ async function main() {
     email: ADMIN_EMAIL,
     password: ADMIN_PASSWORD,
     email_confirm: true,
+    app_metadata: { app: "broadside" },
   });
   if (error) throw error;
   console.log(`✅ Admin criado.\n   email: ${ADMIN_EMAIL}\n   senha: ${ADMIN_PASSWORD}`);

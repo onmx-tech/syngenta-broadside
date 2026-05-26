@@ -101,7 +101,7 @@ export function AdminUsers() {
           <p className="text-[#7c695d] text-[14px] mt-1">
             {users === null
               ? "Carregando…"
-              : `${users.length} ${users.length === 1 ? "usuário" : "usuários"} com acesso ao admin`}
+              : `${users.length} ${users.length === 1 ? "pessoa" : "pessoas"} com acesso ao admin do Broadside`}
           </p>
         </div>
         <button
@@ -165,8 +165,8 @@ export function AdminUsers() {
                   type="button"
                   onClick={() => setConfirmDelete(u)}
                   disabled={u.is_self}
-                  aria-label="Remover usuário"
-                  title={u.is_self ? "Você não pode remover a si mesmo" : "Remover"}
+                  aria-label="Revogar acesso"
+                  title={u.is_self ? "Você não pode revogar seu próprio acesso" : "Revogar acesso"}
                   className="p-2 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -288,9 +288,9 @@ export function AdminUsers() {
       <ConfirmDialog
         open={!!confirmDelete}
         onOpenChange={(v) => !v && setConfirmDelete(null)}
-        title={`Remover ${confirmDelete?.email ?? ""}?`}
-        description="A pessoa perde imediatamente o acesso ao admin. A remoção é definitiva (não passa pela lixeira)."
-        confirmLabel="Remover acesso"
+        title={`Revogar acesso de ${confirmDelete?.email ?? ""}?`}
+        description="A pessoa perde acesso ao admin do Broadside imediatamente. A conta dela no Supabase continua existindo (pode ser usada em outros apps do mesmo projeto). Você pode dar acesso de novo recriando aqui."
+        confirmLabel="Revogar acesso"
         tone="danger"
         onConfirm={async () => {
           if (confirmDelete) await doDelete(confirmDelete);
