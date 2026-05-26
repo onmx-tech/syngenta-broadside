@@ -7,6 +7,7 @@ import {
   type AdminVariant,
 } from "./types";
 import { uploadBlockImage, uploadSeal, type UseAdminState } from "./storage";
+import { errorMessage } from "../../lib/errors";
 
 type Props = { admin: UseAdminState };
 
@@ -32,7 +33,7 @@ export function AdminAssets({ admin }: Props) {
     } catch (e) {
       toast.error("Falha no upload", {
         id: toastId,
-        description: e instanceof Error ? e.message : String(e),
+        description: errorMessage(e),
       });
     } finally {
       setBusyKey(null);
@@ -64,7 +65,7 @@ export function AdminAssets({ admin }: Props) {
     } catch (e) {
       toast.error("Falha no upload", {
         id: toastId,
-        description: e instanceof Error ? e.message : String(e),
+        description: errorMessage(e),
       });
     } finally {
       setBusyKey(null);

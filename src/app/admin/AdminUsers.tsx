@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { createUser, deleteUser, listUsers, type AdminUser } from "../../lib/usersApi";
+import { errorMessage } from "../../lib/errors";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 function relativeDate(iso: string | null): string {
@@ -31,7 +32,7 @@ export function AdminUsers() {
       setUsers(list);
       setError(null);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorMessage(e);
       setError(msg);
     }
   }
@@ -60,7 +61,7 @@ export function AdminUsers() {
       setForm({ email: "", password: "" });
       setCreating(false);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorMessage(e);
       toast.error("Falha ao criar usuário", { description: msg });
     } finally {
       setBusy(false);
@@ -73,7 +74,7 @@ export function AdminUsers() {
       setUsers((prev) => (prev ?? []).filter((u) => u.id !== user.id));
       toast.success(`${user.email} removido`);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorMessage(e);
       toast.error("Falha ao remover", { description: msg });
       throw e;
     }

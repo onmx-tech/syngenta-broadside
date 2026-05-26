@@ -21,6 +21,7 @@ import {
   type DBCompany,
   type DBSiteContent,
 } from "../../lib/supabase";
+import { errorMessage } from "../../lib/errors";
 
 // ---------- mapeamento DB <-> Admin ----------
 
@@ -168,7 +169,7 @@ export function useAdminState(): UseAdminState {
       setStatus("idle");
     } catch (e) {
       if (!mounted.current) return;
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorMessage(e);
       setError(msg);
       setStatus("error");
       toast.error("Falha ao carregar dados", { description: msg });
@@ -202,7 +203,7 @@ export function useAdminState(): UseAdminState {
       }, 1200);
     } catch (e) {
       if (!mounted.current) return;
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorMessage(e);
       setError(msg);
       setStatus("error");
       toast.error("Falha ao salvar", { description: msg });
@@ -277,7 +278,7 @@ export function useAdminState(): UseAdminState {
       }, 1200);
     } catch (e) {
       if (!mounted.current) return;
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorMessage(e);
       setError(msg);
       setStatus("error");
       toast.error("Não consegui salvar a empresa", { description: msg });
@@ -315,7 +316,7 @@ export function useAdminState(): UseAdminState {
                 toast.success(`“${victim.name}” restaurada`);
               } catch (e) {
                 toast.error("Não consegui restaurar", {
-                  description: e instanceof Error ? e.message : String(e),
+                  description: errorMessage(e),
                 });
               }
             })();
@@ -332,7 +333,7 @@ export function useAdminState(): UseAdminState {
           ),
         }));
       }
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorMessage(e);
       toast.error("Não consegui remover", { description: msg });
     }
   }, [state.companies]);
@@ -352,7 +353,7 @@ export function useAdminState(): UseAdminState {
       toast.success(`“${restored.name}” restaurada`);
     } catch (e) {
       toast.error("Não consegui restaurar", {
-        description: e instanceof Error ? e.message : String(e),
+        description: errorMessage(e),
       });
       throw e;
     }

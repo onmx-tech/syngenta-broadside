@@ -9,6 +9,7 @@ import {
   type SiteContentSnapshot,
 } from "../../lib/db";
 import type { DBCompany } from "../../lib/supabase";
+import { errorMessage } from "../../lib/errors";
 import { ConfirmDialog } from "./ConfirmDialog";
 import type { UseAdminState } from "./storage";
 
@@ -47,7 +48,7 @@ export function AdminTrash({ admin }: Props) {
       setDeleted(rows);
     } catch (e) {
       toast.error("Falha carregando lixeira de empresas", {
-        description: e instanceof Error ? e.message : String(e),
+        description: errorMessage(e),
       });
     }
   }
@@ -58,7 +59,7 @@ export function AdminTrash({ admin }: Props) {
       setHistory(rows);
     } catch (e) {
       toast.error("Falha carregando histórico", {
-        description: e instanceof Error ? e.message : String(e),
+        description: errorMessage(e),
       });
     }
   }
@@ -84,7 +85,7 @@ export function AdminTrash({ admin }: Props) {
       toast.success(`“${company.name}” apagada definitivamente`);
     } catch (e) {
       toast.error("Falha ao apagar", {
-        description: e instanceof Error ? e.message : String(e),
+        description: errorMessage(e),
       });
       throw e;
     }
@@ -101,7 +102,7 @@ export function AdminTrash({ admin }: Props) {
       await loadHistory();
     } catch (e) {
       toast.error("Falha ao restaurar", {
-        description: e instanceof Error ? e.message : String(e),
+        description: errorMessage(e),
       });
       throw e;
     }
