@@ -1,6 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
 import imgSelo from "../../assets/blocks/logo_excelencia_seedcare.png";
 
+// ⚠️ SEGURANÇA: este gate é uma BARREIRA SIMBÓLICA, não segurança real.
+// O hash SHA-256 fica no bundle do cliente — qualquer pessoa que abrir o
+// DevTools pode lê-lo e tentar dicionário/rainbow table em segundos.
+// O propósito é só evitar que alguém aterrissando na URL pública dê de cara
+// com a lista de empresas. Conteúdo realmente sensível (escrita no banco)
+// já é protegido pelo Supabase Auth + RLS no admin.
+//
+// Pra trocar a senha: rode hashPassword(novaSenha) em qualquer console e
+// substitua EXPECTED_HASH. Não exponha a senha em texto plano em nenhum lugar.
 const STORAGE_KEY = "seedcare_index_auth";
 const EXPECTED_HASH = "a0592e71d1ed04ff869432c1d8f4637dab7e07f70616aa2e2c1f7892f7397ff3";
 

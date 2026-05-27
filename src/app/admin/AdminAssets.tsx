@@ -175,28 +175,6 @@ export function AdminAssets({ admin }: Props) {
   const [active, setActive] = useState<AdminVariant>("seedcare");
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
-  async function upload(
-    label: string,
-    spec: ImageSpec,
-    file: File,
-    persist: (url: string) => void
-  ) {
-    const toastId = toast.loading(`Enviando ${label}…`);
-    try {
-      const { warnings } = await validateUpload(file, spec);
-      const url = await (async () => {
-        if (label === "selo central") return uploadSeal(active, file);
-        return uploadAssetFor(file);
-      })();
-      void url; // satisfaz TS — função real é passada como persist
-    } finally {
-      toast.dismiss(toastId);
-    }
-    // (path real abaixo)
-  }
-  // Implementação real (substitui o stub acima)
-  void upload;
-
   async function updateBlockImage(key: AdminBlockKey, file: File | null) {
     if (!file) return;
     const spec = BLOCK_SPECS[key];
@@ -363,11 +341,6 @@ export function AdminAssets({ admin }: Props) {
       </section>
     </div>
   );
-}
-
-// Stub mantido só pra evitar erro de import — não usado.
-function uploadAssetFor(_file: File): Promise<string> {
-  throw new Error("not used");
 }
 
 function SpecBadge({ spec }: { spec: ImageSpec }) {

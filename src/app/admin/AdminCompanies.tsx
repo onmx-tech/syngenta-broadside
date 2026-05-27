@@ -44,6 +44,21 @@ export function AdminCompanies({ admin }: Props) {
 
   async function save(c: EditingCompany) {
     if (!c.name.trim() || !c.slug.trim()) return;
+
+    // Detecta conflito de slug com OUTRA empresa (ignora a própria em modo edição).
+    const conflict = state.companies.find(
+      (other) => other.slug === c.slug && other.id !== c.id
+    );
+    if (conflict) {
+      const ok = confirm(
+        `Já existe uma empresa com slug "${c.slug}":\n\n` +
+          `  ${conflict.name}\n\n` +
+          `Salvar agora vai SOBRESCREVER ela com os dados que você está enviando.\n\n` +
+          `Quer continuar?`
+      );
+      if (!ok) return;
+    }
+
     setBusy(true);
     try {
       let logoUrl = c.logoUrl;

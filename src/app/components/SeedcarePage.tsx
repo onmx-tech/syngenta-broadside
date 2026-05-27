@@ -8,8 +8,8 @@ import {
   useSiteContent,
 } from "../../data/siteContent";
 import imgHeader from "../../imports/SySeedcareBroadsidePreview/3a986b7adf9d5b37201789977d57a957178e3cf0.png";
-import imgHero from "../../imports/SySeedcareBroadsidePreview/d935914b8bbc43fd0fc68c6209dd122bd62f2cf2.png";
-import imgFooter from "../../imports/SySeedcareBroadsidePreview/f56fbc1eeaa2ab80af596323ab794f976d675e04.png";
+import imgHero from "../../imports/SySeedcareBroadsidePreview/hero.jpg";
+import imgFooter from "../../imports/SySeedcareBroadsidePreview/footer.jpg";
 import { CasaLogo } from "./CasaLogo";
 import { DownloadBar } from "./DownloadBar";
 
