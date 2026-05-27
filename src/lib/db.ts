@@ -40,9 +40,8 @@ export type CompanyUpsert = {
 };
 
 export async function upsertCompany(payload: CompanyUpsert): Promise<DBCompany> {
-  const row = payload.id
-    ? { ...payload, deleted_at: null }
-    : { ...payload, id: undefined };
+  const { id, ...rest } = payload;
+  const row = id ? { id, ...rest, deleted_at: null } : rest;
   const { data, error } = await supabase
     .from("broadside_companies")
     .upsert(row, { onConflict: "slug" })

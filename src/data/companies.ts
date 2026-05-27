@@ -114,7 +114,6 @@ export function bootstrapCompanies(): Promise<void> {
           logoUrl: c.logo_url ?? "",
           variant: c.variant,
         }))
-        .filter((c) => c.logoUrl !== "")
         .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
       if (mapped.length > 0) setCompanies(mapped);
     })

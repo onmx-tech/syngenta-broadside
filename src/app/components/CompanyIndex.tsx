@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useCompanies, type Variant } from "../../data/companies";
+import { useCompanies, type Company, type Variant } from "../../data/companies";
 import imgHeader from "../../imports/SySeedcareBroadsidePreview/3a986b7adf9d5b37201789977d57a957178e3cf0.png";
 
 const variantLabel: Record<Variant, string> = {
@@ -11,6 +11,57 @@ const variantBadge: Record<Variant, string> = {
   seedcare: "bg-[#765827] text-[#fffeeb]",
   esg: "bg-[#7dbf44] text-[#0b3318]",
 };
+
+const PLACEHOLDER_PALETTE = [
+  "#765827",
+  "#7dbf44",
+  "#3a6a1c",
+  "#a07a3a",
+  "#7c695d",
+  "#3D5527",
+];
+
+function colorFromSlug(slug: string): string {
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
+  return PLACEHOLDER_PALETTE[hash % PLACEHOLDER_PALETTE.length];
+}
+
+function initialsFromName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
+function CompanyLogo({ company }: { company: Company }) {
+  const [failed, setFailed] = useState(false);
+  const showPlaceholder = !company.logoUrl || failed;
+
+  if (showPlaceholder) {
+    return (
+      <div
+        className="w-full h-full rounded-xl flex items-center justify-center text-white font-bold text-[28px] sm:text-[32px] tracking-wide select-none"
+        style={{ backgroundColor: colorFromSlug(company.slug) }}
+        aria-label={`${company.name} (sem logo)`}
+        role="img"
+      >
+        {initialsFromName(company.name)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={company.logoUrl}
+      alt={company.name}
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailed(true)}
+      className="max-w-full max-h-full object-contain"
+    />
+  );
+}
 
 export function CompanyIndex() {
   const companies = useCompanies();
@@ -125,13 +176,7 @@ export function CompanyIndex() {
                       className="block bg-white rounded-2xl border border-[#7c695d]/15 hover:border-[#7dbf44] hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-[#7dbf44] overflow-hidden"
                     >
                       <div className="aspect-[4/3] w-full flex items-center justify-center p-4 sm:p-5 bg-white">
-                        <img
-                          src={company.logoUrl}
-                          alt={company.name}
-                          loading="lazy"
-                          decoding="async"
-                          className="max-w-full max-h-full object-contain"
-                        />
+                        <CompanyLogo company={company} />
                       </div>
                       <div className="px-3 py-3 border-t border-[#7c695d]/10 flex items-center justify-between gap-2">
                         <span className="font-['Inter',sans-serif] font-medium text-[13px] sm:text-[14px] text-[#7c695d] truncate">

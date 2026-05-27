@@ -28,6 +28,8 @@ function normalizeUsername(raw: string): string {
     .slice(0, 31);
 }
 
+type Credential = { username: string; password: string };
+
 export function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,7 @@ export function AdminUsers() {
   const [showPwd, setShowPwd] = useState(false);
   const [form, setForm] = useState({ username: "", password: "" });
   const [busy, setBusy] = useState(false);
+  const [credential, setCredential] = useState<Credential | null>(null);
 
   async function reload() {
     try {
@@ -65,11 +68,9 @@ export function AdminUsers() {
           (a, b) => a.username.localeCompare(b.username, "pt-BR")
         )
       );
-      toast.success(`Usuário ${created.username} criado`, {
-        description: `Senha: ${form.password} — envie pra pessoa por canal seguro.`,
-        duration: 12_000,
-      });
+      setCredential({ username: created.username, password: form.password });
       setForm({ username: "", password: "" });
+      setShowPwd(false);
       setCreating(false);
     } catch (e) {
       const msg = errorMessage(e);
@@ -319,7 +320,105 @@ export function AdminUsers() {
           if (confirmDelete) await doDelete(confirmDelete);
         }}
       />
+
+      <CredentialModal
+        credential={credential}
+        onClose={() => setCredential(null)}
+      />
     </div>
+  );
+}
+
+function CredentialModal({
+  credential,
+  onClose,
+}: {
+  credential: Credential | null;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (credential) setCopied(false);
+  }, [credential]);
+
+  async function copyAll() {
+    if (!credential) return;
+    const payload = `Usuário: ${credential.username}\nSenha: ${credential.password}`;
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopied(true);
+    } catch {
+      toast.error("Não foi possível copiar — selecione e copie manualmente.");
+    }
+  }
+
+  return (
+    <AnimatePresence>
+      {credential && (
+        <motion.div
+          className="fixed inset-0 bg-[#0d0904]/70 backdrop-blur-[2px] z-50 flex items-center justify-center p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Credencial criada"
+        >
+          <motion.div
+            className="bg-white rounded-2xl max-w-[460px] w-full p-6 sm:p-8 shadow-[0_28px_60px_-12px_rgba(0,0,0,0.4)]"
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: "spring", stiffness: 320, damping: 28 }}
+          >
+            <h3 className="font-bold text-[#1a1208] text-[20px] mb-1">
+              Credencial criada
+            </h3>
+            <p className="text-[#7c695d] text-[13px] mb-5">
+              Esta é a <strong>única vez</strong> que a senha aparece aqui. Copie e envie para a pessoa por um canal seguro antes de fechar.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <span className="block text-[11px] uppercase tracking-wide font-bold text-[#7c695d] mb-1">
+                  Usuário
+                </span>
+                <div className="px-3 py-2.5 rounded-lg bg-[#7c695d]/8 border border-[#7c695d]/15 font-mono text-[13.5px] text-[#1a1208] select-all">
+                  {credential.username}
+                </div>
+              </div>
+              <div>
+                <span className="block text-[11px] uppercase tracking-wide font-bold text-[#7c695d] mb-1">
+                  Senha
+                </span>
+                <div className="px-3 py-2.5 rounded-lg bg-[#7c695d]/8 border border-[#7c695d]/15 font-mono text-[13.5px] text-[#1a1208] select-all break-all">
+                  {credential.password}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row gap-2 mt-6">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-[#7c695d]/25 text-[#7c695d] font-medium hover:bg-[#7c695d]/5"
+              >
+                Já copiei, fechar
+              </button>
+              <button
+                type="button"
+                onClick={copyAll}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-[#7dbf44] hover:bg-[#6ba838] text-[#0d0904] font-bold transition-colors"
+              >
+                {copied ? "✓ Copiado" : "Copiar usuário + senha"}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 

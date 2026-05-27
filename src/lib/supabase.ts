@@ -81,6 +81,7 @@ export type DBCompany = {
   logo_url: string | null;
   variant: DBVariant;
   created_at: string;
+  deleted_at: string | null;
 };
 
 export type DBBlockKey =
